@@ -44,11 +44,13 @@ interface StoreState {
   data: AppState;
   updateData: (newData: Partial<AppState>) => void;
   isFirebaseLoaded: boolean;
+  syncError: string | null;
 }
 
 export const useAppStore = create<StoreState>((set) => ({
   data: getAppData(),
   isFirebaseLoaded: false,
+  syncError: null,
   updateData: (newData) => set((state) => {
     const updatedData = { ...state.data, ...newData };
     saveAppData(updatedData);
@@ -67,8 +69,9 @@ onSnapshot(doc(db, 'appData', 'main'), (docSnap) => {
     // If no document exists in Firebase yet, push local state up
     const localData = getAppData();
     setDoc(doc(db, 'appData', 'main'), localData).catch(console.error);
-    useAppStore.setState({ isFirebaseLoaded: true });
+    useAppStore.setState({ isFirebaseLoaded: true, syncError: null });
   }
 }, (error) => {
   console.error("Firebase sync error:", error);
+  useAppStore.setState({ syncError: error.message || "ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (อาจจะติด Permission)" });
 });
