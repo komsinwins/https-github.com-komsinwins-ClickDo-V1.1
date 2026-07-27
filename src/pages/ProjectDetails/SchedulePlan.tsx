@@ -1,15 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
-import { differenceInDays, parseISO, isValid, addDays, format } from 'date-fns';
+import { differenceInDays, parseISO, isValid, addDays, format, min, max } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Download, Loader2, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { Download, Loader2, GripVertical, Plus, Trash2, BarChart, Table as TableIcon } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 export function SchedulePlan({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [newTask, setNewTask] = useState('');
+  const [view, setView] = useState<'table' | 'gantt'>('table');
   
   const lang = data.language || 'th';
   const project = data.projects.find(p => p.id === projectId);
@@ -37,6 +38,31 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     acc[scope.id] = { start, end };
     return acc;
   }, {} as Record<string, { start: Date, end: Date }>);
+
+  // Compute Gantt Chart Bounds
+  let minDate = isValid(parseISO(project.startDate)) ? parseISO(project.startDate) : new Date();
+  let maxDate = minDate;
+  
+  if (projectScopes.length > 0) {
+    const lastScope = projectScopes[projectScopes.length - 1];
+    maxDate = sequentialDates[lastScope.id].end;
+  }
+  
+  const validDates: Date[] = [minDate, maxDate];
+  projectScopes.forEach(s => {
+    if (s.actualStartDate && isValid(parseISO(s.actualStartDate))) validDates.push(parseISO(s.actualStartDate));
+    if (s.actualEndDate && isValid(parseISO(s.actualEndDate))) validDates.push(parseISO(s.actualEndDate));
+  });
+
+  if (validDates.length > 0) {
+    minDate = min(validDates);
+    maxDate = max(validDates);
+  }
+  
+  // Add some padding to dates
+  minDate = addDays(minDate, -2);
+  maxDate = addDays(maxDate, 2);
+  const totalDays = Math.max(1, differenceInDays(maxDate, minDate));
 
   const handleUpdate = (id: string, field: string, value: any) => {
     updateData({
@@ -147,22 +173,41 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-3 rounded-lg border border-slate-200">
-        <div className="flex gap-3 w-full sm:w-auto">
-          <input
-            type="text"
-            value={newTask}
-            onChange={(e) => setNewTask(e.target.value)}
-            placeholder={lang === 'th' ? 'กรอกชื่องาน / หัวข้อ...' : 'Enter task/topic name...'}
-            className="flex-1 sm:w-64 px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF]"
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          />
-          <button
-            onClick={handleAdd}
-            className="px-4 py-1.5 bg-[#0061FF] text-white rounded text-sm font-semibold hover:bg-blue-700 flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            {lang === 'th' ? 'เพิ่มหัวข้อ' : 'Add Topic'}
-          </button>
+        <div className="flex gap-3 w-full sm:w-auto flex-wrap">
+          <div className="flex bg-slate-100 p-1 rounded-md mb-2 sm:mb-0 w-full sm:w-auto">
+            <button
+              onClick={() => setView('table')}
+              className={`flex-1 sm:flex-none flex justify-center items-center gap-2 px-3 py-1.5 text-xs font-medium rounded transition-colors ${view === 'table' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              {lang === 'th' ? 'ตารางข้อมูล' : 'Table View'}
+            </button>
+            <button
+              onClick={() => setView('gantt')}
+              className={`flex-1 sm:flex-none flex justify-center items-center gap-2 px-3 py-1.5 text-xs font-medium rounded transition-colors ${view === 'gantt' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              <BarChart className="w-3.5 h-3.5" />
+              {lang === 'th' ? 'แกนต์ชาร์ต' : 'Gantt Chart'}
+            </button>
+          </div>
+          
+          <div className="flex gap-2 flex-1 min-w-[200px]">
+            <input
+              type="text"
+              value={newTask}
+              onChange={(e) => setNewTask(e.target.value)}
+              placeholder={lang === 'th' ? 'กรอกชื่องาน / หัวข้อ...' : 'Enter task/topic name...'}
+              className="flex-1 sm:w-64 px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF]"
+              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            />
+            <button
+              onClick={handleAdd}
+              className="px-4 py-1.5 bg-[#0061FF] text-white rounded text-sm font-semibold hover:bg-blue-700 flex items-center gap-2 flex-shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">{lang === 'th' ? 'เพิ่มหัวข้อ' : 'Add Topic'}</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -202,7 +247,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       <div className="overflow-x-auto border border-slate-200 rounded bg-white" ref={reportRef} style={{ background: 'white', padding: '16px' }}>
         <h3 className="text-lg font-bold text-slate-800 mb-4 text-center">{lang === 'th' ? 'แผนงานและผลการดำเนินงาน' : 'Schedule & Actual Progress'}</h3>
         
-        <table className="w-full text-left text-[11px] sm:text-xs border-collapse min-w-[900px]">
+        {view === 'table' ? (
+          <table className="w-full text-left text-[11px] sm:text-xs border-collapse min-w-[900px]">
           <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200">
             <tr>
               <th className="p-2 font-semibold w-8"></th>
@@ -325,6 +371,103 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
             )}
           </tbody>
         </table>
+        ) : (
+          <div className="p-4 min-w-[800px]">
+            {projectScopes.length === 0 ? (
+              <p className="text-center text-slate-500">{lang === 'th' ? 'ไม่มีข้อมูลงาน' : 'No tasks available.'}</p>
+            ) : (
+              <div className="relative pt-6">
+                {/* Timeline Header */}
+                <div className="flex border-b border-slate-200 pb-2 mb-4 text-[10px] text-slate-500 relative pl-[200px]">
+                  <div className="absolute left-0 bottom-2 w-[190px] font-semibold text-slate-700 text-xs">{lang === 'th' ? 'ชื่องาน' : 'Task'}</div>
+                  <div className="flex-1 flex justify-between">
+                    <span>{format(minDate, 'dd MMM yyyy')}</span>
+                    <span>{format(maxDate, 'dd MMM yyyy')}</span>
+                  </div>
+                </div>
+
+                {/* Tasks */}
+                <div className="space-y-4">
+                  {projectScopes.map(scope => {
+                    const calculatedDates = sequentialDates[scope.id];
+                    let bStart = 0;
+                    let bWidth = 0;
+                    
+                    const startOffset = differenceInDays(calculatedDates.start, minDate);
+                    const duration = (scope.durationDays || 1);
+                    
+                    bStart = Math.max(0, (startOffset / totalDays) * 100);
+                    bWidth = Math.min(100 - bStart, (duration / totalDays) * 100);
+
+                    let aStart = 0;
+                    let aWidth = 0;
+                    if (scope.actualStartDate && isValid(parseISO(scope.actualStartDate))) {
+                      const actualEnd = scope.actualEndDate && isValid(parseISO(scope.actualEndDate)) 
+                        ? parseISO(scope.actualEndDate) 
+                        : new Date();
+                        
+                      const actualStartOffset = differenceInDays(parseISO(scope.actualStartDate), minDate);
+                      const actualDur = differenceInDays(actualEnd, parseISO(scope.actualStartDate)) + 1;
+                      
+                      aStart = Math.max(0, (actualStartOffset / totalDays) * 100);
+                      aWidth = Math.min(100 - aStart, (actualDur / totalDays) * 100);
+                    }
+
+                    return (
+                      <div 
+                        key={scope.id} 
+                        className={`relative flex items-center group ${draggedId === scope.id ? 'opacity-50' : ''}`}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, scope.id)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, scope.id)}
+                      >
+                        <div className="w-[190px] flex-shrink-0 text-xs text-slate-700 font-medium truncate pr-4 flex items-center cursor-grab active:cursor-grabbing">
+                          <GripVertical className="w-3 h-3 text-slate-400 mr-2 flex-shrink-0" />
+                          <span title={scope.taskName} className="truncate">{scope.taskName}</span>
+                        </div>
+                        
+                        <div className="flex-1 h-10 relative bg-slate-50 rounded border border-slate-100">
+                          {bWidth > 0 && (
+                            <div 
+                              className="absolute top-1 h-3 rounded-full bg-[#0061FF]/30 border border-[#0061FF]/50"
+                              style={{ left: `${bStart}%`, width: `${bWidth}%` }}
+                              title={`${lang === 'th' ? 'แผน:' : 'Baseline:'} ${format(calculatedDates.start, 'dd/MM/yyyy')} - ${format(calculatedDates.end, 'dd/MM/yyyy')}`}
+                            />
+                          )}
+                          
+                          {aWidth > 0 && (
+                            <div 
+                              className={`absolute bottom-1 h-3 rounded-full ${scope.progress === 100 ? 'bg-[#22C55E]' : 'bg-[#FF5E00]'}`}
+                              style={{ left: `${aStart}%`, width: `${aWidth}%` }}
+                              title={`${lang === 'th' ? 'จริง:' : 'Actual:'} ${scope.actualStartDate} - ${scope.actualEndDate || (lang === 'th' ? 'กำลังดำเนินการ' : 'Ongoing')}`}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Legend */}
+                <div className="mt-8 flex items-center justify-center gap-6 text-[10px] text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-3 bg-[#0061FF]/30 border border-[#0061FF]/50 rounded-sm"></div>
+                    <span>{lang === 'th' ? 'แผนงาน (Baseline)' : 'Baseline'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-3 bg-[#FF5E00] rounded-sm"></div>
+                    <span>{lang === 'th' ? 'กำลังดำเนินการ' : 'In Progress'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-3 bg-[#22C55E] rounded-sm"></div>
+                    <span>{lang === 'th' ? 'เสร็จสมบูรณ์' : 'Completed'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
