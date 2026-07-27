@@ -24,6 +24,11 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
     ? differenceInDays(parseISO(project.actualCompletionDate), parseISO(project.startDate))
     : 0;
 
+  const projectScopes = data.scopes.filter(s => s.projectId === project.id);
+  const progress = projectScopes.length > 0 
+    ? Math.round(projectScopes.reduce((sum, s) => sum + s.progress, 0) / projectScopes.length)
+    : 0;
+
   return (
     <div className="max-w-4xl space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -132,10 +137,24 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
             ))}
           </select>
         </div>
+
+        <div className="space-y-1 md:col-span-3">
+          <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'ผู้รับเหมาหลัก' : 'Main Contractor'}</label>
+          <select
+            value={project.contractorId || ''}
+            onChange={e => handleChange('contractorId', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent bg-white"
+          >
+            <option value="">{lang === 'th' ? 'เลือกผู้รับเหมา...' : 'Select Contractor...'}</option>
+            {data.contractorMaster?.map(c => (
+              <option key={c.id} value={c.id}>{c.firstName} {c.lastName} {c.company ? `(${c.company})` : ''}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="mt-6 p-4 bg-slate-50 rounded border border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-800 mb-3 border-b border-slate-200 pb-2">{lang === 'th' ? 'สรุประยะเวลา' : 'Duration Summary'}</h3>
+        <h3 className="text-sm font-semibold text-slate-800 mb-3 border-b border-slate-200 pb-2">{lang === 'th' ? 'สรุปข้อมูลโครงการ' : 'Project Summary'}</h3>
         <div className="flex gap-8">
           <div className="border-l-4 border-[#0061FF] pl-3">
             <p className="text-[11px] font-bold uppercase text-slate-500 mb-1">{lang === 'th' ? 'ระยะเวลาตามแผน' : 'Planned Duration'}</p>
@@ -144,6 +163,10 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
           <div className="border-l-4 border-[#22C55E] pl-3">
             <p className="text-[11px] font-bold uppercase text-slate-500 mb-1">{lang === 'th' ? 'ระยะเวลาจริง' : 'Actual Duration'}</p>
             <p className="text-[18px] font-bold text-slate-800">{actualDuration} {lang === 'th' ? 'วัน' : 'days'}</p>
+          </div>
+          <div className="border-l-4 border-[#FF5E00] pl-3">
+            <p className="text-[11px] font-bold uppercase text-slate-500 mb-1">{lang === 'th' ? 'ความคืบหน้าโครงการ' : 'Overall Progress'}</p>
+            <p className="text-[18px] font-bold text-slate-800">{progress}%</p>
           </div>
         </div>
       </div>

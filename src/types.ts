@@ -29,16 +29,20 @@ export interface Project {
   ownerId: string;
   salespersonId: string;
   managerId: string;
+  contractorId?: string;
 }
 
 export interface ScopeOfWork {
   id: string;
   projectId: string;
   taskName: string;
-  baselineStartDate: string;
-  baselineEndDate: string;
-  actualStartDate: string;
-  actualEndDate: string;
+  parentId?: string;
+  order?: number;
+  durationDays?: number;
+  baselineStartDate?: string;
+  baselineEndDate?: string;
+  actualStartDate?: string;
+  actualEndDate?: string;
   progress: number;
 }
 

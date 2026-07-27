@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '../store';
 import { Plus, Search, Calendar, MapPin, ChevronRight, FolderKanban, LayoutGrid, List, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
