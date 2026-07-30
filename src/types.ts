@@ -27,6 +27,7 @@ export interface ProjectStatus {
 export interface Project {
   id: string;
   name: string;
+  purchaseOrder?: string;
   location: string;
   installationArea?: string;
   projectDetails?: string;

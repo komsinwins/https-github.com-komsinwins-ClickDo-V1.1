@@ -71,6 +71,16 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
         </div>
 
         <div className="space-y-1 md:col-span-12">
+          <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'คำสั่งซื้อ (PO)' : 'Purchase Order (PO)'}</label>
+          <input
+            type="text"
+            value={project.purchaseOrder || ''}
+            onChange={e => handleChange('purchaseOrder', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent"
+          />
+        </div>
+
+        <div className="space-y-1 md:col-span-12">
           <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'สถานที่ติดตั้ง' : 'Installation Location'}</label>
           <textarea
             value={project.location}
