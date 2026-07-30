@@ -42,6 +42,34 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
           />
         </div>
 
+        <div className="space-y-1 md:col-span-6">
+          <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'ชื่อบริษัท' : 'Customer Company'}</label>
+          <select
+            value={project.customerId}
+            onChange={e => handleChange('customerId', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent bg-white"
+          >
+            <option value="">{lang === 'th' ? 'เลือกบริษัท...' : 'Select Company...'}</option>
+            {data.customers.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1 md:col-span-6">
+          <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'เจ้าของโครงการ' : 'Owner Company'}</label>
+          <select
+            value={project.ownerId}
+            onChange={e => handleChange('ownerId', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent bg-white"
+          >
+            <option value="">{lang === 'th' ? 'เลือกเจ้าของโครงการ...' : 'Select Owner...'}</option>
+            {data.owners.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="space-y-1 md:col-span-12">
           <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'สถานที่ติดตั้ง' : 'Installation Location'}</label>
           <textarea
@@ -59,6 +87,16 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
             value={project.installationArea || ''}
             onChange={e => handleChange('installationArea', e.target.value)}
             className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent"
+          />
+        </div>
+
+        <div className="space-y-1 md:col-span-12">
+          <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'รายละเอียดโครงการ' : 'Project Details'}</label>
+          <textarea
+            value={project.projectDetails || ''}
+            onChange={e => handleChange('projectDetails', e.target.value)}
+            rows={3}
+            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent resize-none"
           />
         </div>
 
@@ -90,34 +128,6 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
             onChange={e => handleChange('actualCompletionDate', e.target.value)}
             className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent"
           />
-        </div>
-
-        <div className="space-y-1 md:col-span-3">
-          <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'ลูกค้า' : 'Customer Company'}</label>
-          <select
-            value={project.customerId}
-            onChange={e => handleChange('customerId', e.target.value)}
-            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent bg-white"
-          >
-            <option value="">{lang === 'th' ? 'เลือกลูกค้า...' : 'Select Customer...'}</option>
-            {data.customers.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-1 md:col-span-3">
-          <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'เจ้าของโครงการ' : 'Owner Company'}</label>
-          <select
-            value={project.ownerId}
-            onChange={e => handleChange('ownerId', e.target.value)}
-            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent bg-white"
-          >
-            <option value="">{lang === 'th' ? 'เลือกเจ้าของโครงการ...' : 'Select Owner...'}</option>
-            {data.owners.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
         </div>
 
         <div className="space-y-1 md:col-span-3">

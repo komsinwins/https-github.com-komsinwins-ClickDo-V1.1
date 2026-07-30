@@ -56,7 +56,7 @@ export function Dashboard() {
         
         <div className="bg-white p-4 rounded-lg border border-slate-200 flex flex-col justify-center">
           <div className="border-l-4 border-[#FF5E00] pl-3">
-            <p className="text-[11px] font-bold uppercase text-slate-500 mb-1">{lang === 'th' ? 'ลูกค้าทั้งหมด' : 'Clients'}</p>
+            <p className="text-[11px] font-bold uppercase text-slate-500 mb-1">{lang === 'th' ? 'บริษัททั้งหมด' : 'Companies'}</p>
             <p className="text-[20px] font-bold text-slate-800">{totalClients}</p>
           </div>
         </div>
@@ -78,7 +78,7 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg border border-slate-200">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">{lang === 'th' ? 'สัดส่วนโครงการตามลูกค้า' : 'Projects by Customer'}</h3>
+          <h3 className="text-sm font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">{lang === 'th' ? 'สัดส่วนโครงการตามบริษัท' : 'Projects by Company'}</h3>
           <div className="h-[300px]">
             {projectsByCustomer.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -133,7 +133,7 @@ export function Dashboard() {
               <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200">
                 <tr>
                   <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</th>
-                  <th className="p-3 font-semibold">{lang === 'th' ? 'ลูกค้า' : 'Customer'}</th>
+                  <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อบริษัท' : 'Company'}</th>
                   <th className="p-3 font-semibold">{lang === 'th' ? 'วันที่ปิดโครงการ' : 'Completion Date'}</th>
                   <th className="p-3 font-semibold">{lang === 'th' ? 'ระยะเวลาจริง' : 'Actual Duration'}</th>
                 </tr>

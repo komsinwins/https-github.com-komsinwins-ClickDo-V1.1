@@ -73,7 +73,7 @@ export function Projects({ navigate }: ProjectsProps) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder={lang === 'th' ? 'ค้นหาชื่อโครงการ, ลูกค้า, เจ้าของ, ฝ่ายขาย, ผจก.โครงการ...' : 'Search projects, customers, owners, sales, managers...'}
+            placeholder={lang === 'th' ? 'ค้นหาชื่อโครงการ, ชื่อบริษัท, เจ้าของ, ฝ่ายขาย, ผจก.โครงการ...' : 'Search projects, companies, owners, sales, managers...'}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#0061FF] focus:bg-white transition-all"
@@ -143,7 +143,7 @@ export function Projects({ navigate }: ProjectsProps) {
                   <div className="mt-3 space-y-2">
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="text-slate-500">
-                        <span className="block text-[10px] uppercase font-semibold opacity-70">{lang === 'th' ? 'ลูกค้า' : 'Customer'}</span>
+                        <span className="block text-[10px] uppercase font-semibold opacity-70">{lang === 'th' ? 'ชื่อบริษัท' : 'Company'}</span>
                         <span className="font-medium text-slate-700 truncate block">
                           {data.customers.find(c => c.id === project.customerId)?.name || '-'}
                         </span>
@@ -211,7 +211,7 @@ export function Projects({ navigate }: ProjectsProps) {
               <tr>
                 <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</th>
                 <th className="p-3 font-semibold">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'ลูกค้า' : 'Customer'}</th>
+                <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อบริษัท' : 'Company'}</th>
                 <th className="p-3 font-semibold">{lang === 'th' ? 'เจ้าของโครงการ' : 'Project Owner'}</th>
                 <th className="p-3 font-semibold">{lang === 'th' ? 'ฝ่ายขาย' : 'Sales'}</th>
                 <th className="p-3 font-semibold">{lang === 'th' ? 'ผจก.โครงการ' : 'PM'}</th>

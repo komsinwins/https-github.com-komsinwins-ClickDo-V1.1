@@ -29,6 +29,7 @@ export interface Project {
   name: string;
   location: string;
   installationArea?: string;
+  projectDetails?: string;
   startDate: string;
   endDate: string;
   actualCompletionDate: string;
