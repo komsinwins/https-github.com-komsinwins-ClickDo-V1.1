@@ -1,22 +1,30 @@
+import { useState } from 'react';
 import { useAppStore } from '../store';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { differenceInDays, parseISO } from 'date-fns';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 const COLORS = ['#2563eb', '#f97316', '#10b981', '#6366f1', '#ec4899', '#8b5cf6'];
 
-export function Dashboard() {
+interface DashboardProps {
+  navigate?: (route: string) => void;
+}
+
+export function Dashboard({ navigate }: DashboardProps = {}) {
   const { data } = useAppStore();
   const lang = data.language || 'th';
+  const [isClosedProjectsExpanded, setIsClosedProjectsExpanded] = useState(true);
 
   const totalProjects = data.projects.length;
-  const closedProjects = data.projects.filter(p => p.actualCompletionDate || (p.statusId && data.projectStatuses?.find(s => s.id === p.statusId)?.name === 'ปิดโครงการ')).length;
+  const closedProjectsList = data.projects.filter(p => p.actualCompletionDate || (p.statusId && data.projectStatuses?.find(s => s.id === p.statusId)?.name === 'ปิดโครงการ'));
+  const closedProjects = closedProjectsList.length;
   const activeProjects = totalProjects - closedProjects;
   const totalClients = data.customers.length;
   
   const projectsByCustomer = data.customers.map(c => ({
     name: c.name,
     count: data.projects.filter(p => p.customerId === c.id).length
-  })).filter(item => item.count > 0);
+  })).filter(item => item.count > 0).sort((a, b) => b.count - a.count);
 
   const projectsByPM = data.projectManagers.map(pm => ({
     name: pm.name,
@@ -109,7 +117,7 @@ export function Dashboard() {
                     outerRadius={100}
                     fill="#2563eb"
                     dataKey="count"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, value }) => `${name} (${value})`}
                   >
                     {projectsByPM.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -145,7 +153,11 @@ export function Dashboard() {
                 {endingSoon.map(project => {
                   const daysLeft = differenceInDays(parseISO(project.endDate), today);
                   return (
-                    <tr key={project.id} className="hover:bg-slate-50 transition-colors">
+                    <tr 
+                      key={project.id} 
+                      onClick={() => navigate ? navigate(`projects/${project.id}/info`) : undefined}
+                      className={`transition-colors ${navigate ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                    >
                       <td className="p-3 font-medium text-slate-800">{project.name}</td>
                       <td className="p-3 text-slate-600">
                         {data.customers.find(c => c.id === project.customerId)?.name || '-'}
@@ -170,50 +182,61 @@ export function Dashboard() {
       </div>
 
       <div className="bg-white p-4 rounded-lg border border-slate-200">
-        <h3 className="text-sm font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">{lang === 'th' ? 'โครงการที่ปิดแล้ว' : 'Closed Projects'}</h3>
-        <div className="overflow-x-auto">
-          {data.projects.filter(p => p.actualCompletionDate || (p.statusId && data.projectStatuses?.find(s => s.id === p.statusId)?.name === 'ปิดโครงการ')).length > 0 ? (
-            <table className="w-full text-left text-sm border-collapse min-w-[600px]">
-              <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200">
-                <tr>
-                  <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</th>
-                  <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อบริษัท' : 'Company'}</th>
-                  <th className="p-3 font-semibold">{lang === 'th' ? 'วันที่ปิดโครงการ' : 'Completion Date'}</th>
-                  <th className="p-3 font-semibold">{lang === 'th' ? 'ระยะเวลาจริง' : 'Actual Duration'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.projects
-                  .filter(p => p.actualCompletionDate || (p.statusId && data.projectStatuses?.find(s => s.id === p.statusId)?.name === 'ปิดโครงการ'))
-                  .map(project => {
-                    let actualDuration = '-';
-                    if (project.startDate) {
-                       const end = project.actualCompletionDate ? parseISO(project.actualCompletionDate) : new Date();
-                       actualDuration = `${differenceInDays(end, parseISO(project.startDate))} ${lang === 'th' ? 'วัน' : 'days'}`;
-                    }
-                    return (
-                      <tr key={project.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3 font-medium text-slate-800">{project.name}</td>
-                        <td className="p-3 text-slate-600">
-                          {data.customers.find(c => c.id === project.customerId)?.name || '-'}
-                        </td>
-                        <td className="p-3 text-slate-600">
-                          {project.actualCompletionDate ? project.actualCompletionDate : (lang === 'th' ? 'ปิดโครงการ (ตามสถานะ)' : 'Closed (By status)')}
-                        </td>
-                        <td className="p-3 text-slate-600">
-                          {actualDuration}
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          ) : (
-            <div className="text-center py-6 text-slate-400">
-              {lang === 'th' ? 'ไม่มีโครงการที่ปิดแล้ว' : 'No closed projects yet'}
-            </div>
-          )}
-        </div>
+        <button 
+          onClick={() => setIsClosedProjectsExpanded(!isClosedProjectsExpanded)}
+          className="flex items-center gap-2 w-full text-left focus:outline-none"
+        >
+          {isClosedProjectsExpanded ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />}
+          <h3 className="text-sm font-semibold text-slate-800 border-b border-slate-100 pb-2 flex-1">{lang === 'th' ? 'โครงการที่ปิดแล้ว' : 'Closed Projects'}</h3>
+        </button>
+        
+        {isClosedProjectsExpanded && (
+          <div className="overflow-x-auto mt-4">
+            {closedProjectsList.length > 0 ? (
+              <table className="w-full text-left text-sm border-collapse min-w-[600px]">
+                <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200">
+                  <tr>
+                    <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</th>
+                    <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อบริษัท' : 'Company'}</th>
+                    <th className="p-3 font-semibold">{lang === 'th' ? 'วันที่ปิดโครงการ' : 'Completion Date'}</th>
+                    <th className="p-3 font-semibold">{lang === 'th' ? 'ระยะเวลาจริง' : 'Actual Duration'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {closedProjectsList.map(project => {
+                      let actualDuration = '-';
+                      if (project.startDate) {
+                         const end = project.actualCompletionDate ? parseISO(project.actualCompletionDate) : new Date();
+                         actualDuration = `${differenceInDays(end, parseISO(project.startDate))} ${lang === 'th' ? 'วัน' : 'days'}`;
+                      }
+                      return (
+                        <tr 
+                          key={project.id} 
+                          onClick={() => navigate ? navigate(`projects/${project.id}/info`) : undefined}
+                          className={`transition-colors ${navigate ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                        >
+                          <td className="p-3 font-medium text-slate-800">{project.name}</td>
+                          <td className="p-3 text-slate-600">
+                            {data.customers.find(c => c.id === project.customerId)?.name || '-'}
+                          </td>
+                          <td className="p-3 text-slate-600">
+                            {project.actualCompletionDate ? project.actualCompletionDate : (lang === 'th' ? 'ปิดโครงการ (ตามสถานะ)' : 'Closed (By status)')}
+                          </td>
+                          <td className="p-3 text-slate-600">
+                            {actualDuration}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            ) : (
+              <div className="text-center py-6 text-slate-400">
+                {lang === 'th' ? 'ไม่มีโครงการที่ปิดแล้ว' : 'No closed projects yet'}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

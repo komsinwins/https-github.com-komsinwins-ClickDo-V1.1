@@ -21,7 +21,7 @@ export default function App() {
   };
 
   const renderContent = () => {
-    if (currentRoute === 'dashboard') return <Dashboard />;
+    if (currentRoute === 'dashboard') return <Dashboard navigate={navigate} />;
     if (currentRoute === 'projects') return <Projects navigate={navigate} />;
     if (currentRoute === 'master') return <MasterData />;
     
