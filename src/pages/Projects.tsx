@@ -11,7 +11,7 @@ interface ProjectsProps {
 export function Projects({ navigate }: ProjectsProps) {
   const { data, updateData } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'board'>('grid');
   const lang = data.language || 'th';
 
   const createNewProject = () => {
@@ -94,10 +94,73 @@ export function Projects({ navigate }: ProjectsProps) {
           >
             <LayoutGrid className="w-4 h-4" />
           </button>
+          <button
+            onClick={() => setViewMode('board')}
+            className={`p-1.5 rounded transition-colors ${viewMode === 'board' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-500 hover:text-slate-800'}`}
+            title={lang === 'th' ? 'มุมมองแบบบอร์ด' : 'Board View'}
+          >
+            <FolderKanban className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {viewMode === 'grid' ? (
+      {viewMode === 'board' ? (
+        <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-220px)] items-start scrollbar-thin scrollbar-thumb-slate-300">
+          {[...(data.projectStatuses || []), { id: '', name: lang === 'th' ? 'ไม่มีสถานะ' : 'No Status', color: '#cbd5e1' }].map(status => {
+            const columnProjects = filteredProjects.filter(p => (p.statusId || '') === status.id);
+            if (!status.id && columnProjects.length === 0) return null;
+            return (
+              <div key={status.id} className="min-w-[280px] w-[280px] bg-slate-50/80 border border-slate-200 rounded-lg p-3 flex flex-col max-h-full flex-shrink-0">
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: status.color || '#cbd5e1' }}></span>
+                    <h3 className="font-semibold text-slate-800 text-sm">{status.name}</h3>
+                  </div>
+                  <span className="bg-white text-slate-500 text-xs px-2 py-0.5 rounded-full border border-slate-200 font-medium shadow-sm">{columnProjects.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1 pb-1">
+                  {columnProjects.map(project => {
+                    const projectScopes = data.scopes.filter(s => s.projectId === project.id);
+                    const progress = projectScopes.length > 0 ? Math.round(projectScopes.reduce((sum, s) => sum + s.progress, 0) / projectScopes.length) : 0;
+                    return (
+                      <div 
+                        key={project.id}
+                        onClick={() => navigate(`projects/${project.id}/info`)}
+                        className="bg-white rounded-lg border border-slate-200 p-3 hover:border-[#0061FF] hover:shadow-sm cursor-pointer group relative"
+                      >
+                         <button
+                            onClick={(e) => deleteProject(project.id, e)}
+                            className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all z-10"
+                            title={lang === 'th' ? 'ลบโครงการ' : 'Delete Project'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <h4 className="font-semibold text-sm text-slate-800 pr-6 line-clamp-2 leading-tight">{project.name}</h4>
+                          <div className="mt-2.5 text-[11px] text-slate-500 space-y-1.5">
+                             <div className="flex items-start gap-1.5">
+                               <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0 text-[#FF5E00]" />
+                               <span className="line-clamp-1">{data.customers.find(c => c.id === project.customerId)?.name || (lang === 'th' ? 'ไม่มีลูกค้า' : 'No customer')}</span>
+                             </div>
+                             <div className="flex items-center gap-1.5 text-slate-600">
+                               <Calendar className="w-3 h-3 text-[#0061FF]" />
+                               <span>{project.startDate ? format(parseISO(project.startDate), 'dd/MM/yy') : 'TBD'} - {project.endDate ? format(parseISO(project.endDate), 'dd/MM/yy') : 'TBD'}</span>
+                             </div>
+                          </div>
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center gap-2">
+                             <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                               <div className="bg-[#22C55E] h-full rounded-full transition-all" style={{ width: `${progress}%` }} />
+                             </div>
+                             <span className="text-[10px] font-bold text-slate-500 w-7 text-right">{progress}%</span>
+                          </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredProjects.map((project) => {
             const duration = project.startDate && project.endDate 
@@ -207,17 +270,17 @@ export function Projects({ navigate }: ProjectsProps) {
       ) : (
         <div className="bg-white rounded-lg border border-slate-200 overflow-x-auto">
           <table className="w-full text-left text-sm border-collapse min-w-[800px]">
-            <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200">
+            <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200 text-xs">
               <tr>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อบริษัท' : 'Company'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'เจ้าของโครงการ' : 'Project Owner'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'ฝ่ายขาย' : 'Sales'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'ผจก.โครงการ' : 'PM'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'ความคืบหน้า' : 'Progress'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'ระยะเวลาโครงการ' : 'Duration'}</th>
-                <th className="p-3 font-semibold text-right">{lang === 'th' ? 'จัดการ' : 'Actions'}</th>
+                <th className="p-3 font-semibold whitespace-nowrap">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</th>
+                <th className="p-3 font-semibold whitespace-nowrap">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
+                <th className="p-3 font-semibold whitespace-nowrap">{lang === 'th' ? 'ชื่อบริษัท' : 'Company'}</th>
+                <th className="p-3 font-semibold whitespace-nowrap">{lang === 'th' ? 'เจ้าของโครงการ' : 'Project Owner'}</th>
+                <th className="p-3 font-semibold whitespace-nowrap">{lang === 'th' ? 'ฝ่ายขาย' : 'Sales'}</th>
+                <th className="p-3 font-semibold whitespace-nowrap">{lang === 'th' ? 'ผจก.โครงการ' : 'PM'}</th>
+                <th className="p-3 font-semibold whitespace-nowrap">{lang === 'th' ? 'ความคืบหน้า' : 'Progress'}</th>
+                <th className="p-3 font-semibold whitespace-nowrap">{lang === 'th' ? 'ระยะเวลาโครงการ' : 'Duration'}</th>
+                <th className="p-3 font-semibold whitespace-nowrap text-right">{lang === 'th' ? 'จัดการ' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -237,14 +300,14 @@ export function Projects({ navigate }: ProjectsProps) {
                     onClick={() => navigate(`projects/${project.id}/info`)}
                     className="hover:bg-slate-50 cursor-pointer transition-colors group"
                   >
-                    <td className="p-3 font-medium text-slate-800">{project.name}</td>
-                    <td className="p-3">
+                    <td className="p-2 font-medium text-slate-800 text-xs truncate max-w-[150px]" title={project.name}>{project.name}</td>
+                    <td className="p-2">
                       {project.statusId && data.projectStatuses ? (
                         (() => {
                           const status = data.projectStatuses.find(s => s.id === project.statusId);
                           return status ? (
                             <span 
-                              className="px-2 py-1 text-[10px] font-bold rounded-full text-white"
+                              className="px-2 py-0.5 text-[9px] font-bold rounded-full text-white whitespace-nowrap"
                               style={{ backgroundColor: status.color || '#0061FF' }}
                             >
                               {status.name}
@@ -253,28 +316,28 @@ export function Projects({ navigate }: ProjectsProps) {
                         })()
                       ) : <span className="text-slate-400">-</span>}
                     </td>
-                    <td className="p-3 text-slate-600 text-xs">
+                    <td className="p-2 text-slate-600 text-[11px] truncate max-w-[120px]">
                       {data.customers.find(c => c.id === project.customerId)?.name || '-'}
                     </td>
-                    <td className="p-3 text-slate-600 text-xs">
+                    <td className="p-2 text-slate-600 text-[11px] truncate max-w-[120px]">
                       {data.owners.find(o => o.id === project.ownerId)?.name || '-'}
                     </td>
-                    <td className="p-3 text-slate-600 text-xs">
+                    <td className="p-2 text-slate-600 text-[11px] truncate max-w-[100px]">
                       {data.salespersons.find(s => s.id === project.salespersonId)?.name || '-'}
                     </td>
-                    <td className="p-3 text-slate-600 text-xs">
+                    <td className="p-2 text-slate-600 text-[11px] truncate max-w-[100px]">
                       {data.projectManagers.find(m => m.id === project.managerId)?.name || '-'}
                     </td>
-                    <td className="p-3 text-slate-600 text-xs">
-                      <div className="flex items-center gap-2 w-32">
+                    <td className="p-2 text-slate-600 text-[11px]">
+                      <div className="flex items-center gap-1 w-24">
                         <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
                           <div className="bg-[#22C55E] h-full rounded-full transition-all" style={{ width: `${progress}%` }} />
                         </div>
-                        <span className="font-semibold text-slate-500 w-7">{progress}%</span>
+                        <span className="font-semibold text-slate-500 w-6 text-[10px]">{progress}%</span>
                       </div>
                     </td>
-                    <td className="p-3 text-slate-600 text-xs">{duration} {lang === 'th' ? 'วัน' : 'days'}</td>
-                    <td className="p-3 text-right">
+                    <td className="p-2 text-slate-600 text-[11px] whitespace-nowrap">{duration} {lang === 'th' ? 'วัน' : 'days'}</td>
+                    <td className="p-2 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={(e) => {

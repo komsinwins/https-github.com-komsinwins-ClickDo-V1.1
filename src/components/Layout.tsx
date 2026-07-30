@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react';
+import { useState, ReactNode, useRef } from 'react';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -6,7 +6,9 @@ import {
   Settings,
   Bell,
   Menu,
-  Globe
+  Globe,
+  Download,
+  Upload
 } from 'lucide-react';
 import { useAppStore } from '../store';
 import { differenceInDays, parseISO } from 'date-fns';
@@ -65,6 +67,7 @@ export function Header() {
   const { data, updateData } = useAppStore();
   const today = new Date();
   const lang = data.language || 'th';
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const endingSoon = data.projects.filter(p => {
     if (!p.endDate || p.actualCompletionDate) return false;
@@ -72,12 +75,64 @@ export function Header() {
     return daysLeft >= 0 && daysLeft <= 7;
   });
 
+  const exportData = () => {
+    const dataStr = JSON.stringify(data, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+    const exportFileDefaultName = `clickdo_backup_${new Date().toISOString().split('T')[0]}.json`;
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
+
+  const importData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parsed = JSON.parse(e.target?.result as string);
+        if (window.confirm(lang === 'th' ? "ยืนยันการคืนค่าข้อมูล? ข้อมูลปัจจุบันจะถูกเขียนทับ" : "Confirm restore? Current data will be replaced.")) {
+          updateData(parsed);
+          alert(lang === 'th' ? "สำรองข้อมูลสำเร็จ" : "Restore successful");
+        }
+      } catch(err) {
+        alert(lang === 'th' ? "ไฟล์สำรองข้อมูลไม่ถูกต้อง" : "Invalid backup file");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0">
       <h2 className="text-lg font-semibold text-slate-800">
         {lang === 'th' ? 'การจัดการโครงการ' : 'Project Management'}
       </h2>
       <div className="flex items-center gap-4">
+        <input 
+          type="file" 
+          accept=".json" 
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          onChange={importData}
+        />
+        <div className="flex items-center gap-2 mr-2 border-r border-slate-200 pr-4">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 p-1.5 px-3 bg-slate-50 text-slate-600 rounded-md hover:bg-slate-100 transition-colors text-sm font-medium border border-slate-200"
+            title={lang === 'th' ? 'นำเข้าข้อมูล' : 'Import Backup'}
+          >
+            <Upload className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={exportData}
+            className="flex items-center gap-1.5 p-1.5 px-3 bg-slate-50 text-slate-600 rounded-md hover:bg-slate-100 transition-colors text-sm font-medium border border-slate-200"
+            title={lang === 'th' ? 'สำรองข้อมูล' : 'Export Backup'}
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
         <button
           onClick={() => updateData({ language: lang === 'th' ? 'en' : 'th' })}
           className="flex items-center gap-2 p-1.5 px-3 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors text-sm font-medium"
