@@ -52,6 +52,16 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
           />
         </div>
 
+        <div className="space-y-1 md:col-span-12">
+          <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'พื้นที่ติดตั้ง' : 'Installation Area'}</label>
+          <input
+            type="text"
+            value={project.installationArea || ''}
+            onChange={e => handleChange('installationArea', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent"
+          />
+        </div>
+
         <div className="space-y-1 md:col-span-4">
           <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'วันที่เริ่มโครงการ' : 'Start Date'}</label>
           <input
@@ -148,6 +158,19 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
             <option value="">{lang === 'th' ? 'เลือกผู้รับเหมา...' : 'Select Contractor...'}</option>
             {data.contractorMaster?.map(c => (
               <option key={c.id} value={c.id}>{c.firstName} {c.lastName} {c.company ? `(${c.company})` : ''}</option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1 md:col-span-3">
+          <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'สถานะโครงการ' : 'Project Status'}</label>
+          <select
+            value={project.statusId || ''}
+            onChange={e => handleChange('statusId', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent bg-white"
+          >
+            <option value="">{lang === 'th' ? 'เลือกสถานะ...' : 'Select Status...'}</option>
+            {data.projectStatuses?.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
         </div>

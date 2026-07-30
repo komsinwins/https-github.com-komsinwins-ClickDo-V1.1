@@ -123,12 +123,54 @@ export function Projects({ navigate }: ProjectsProps) {
                   <Trash2 className="w-4 h-4" />
                 </button>
                 <div className="flex-1 pr-6">
-                  <h3 className="text-sm font-semibold text-slate-800 group-hover:text-[#0061FF] transition-colors line-clamp-1">{project.name}</h3>
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="text-sm font-semibold text-slate-800 group-hover:text-[#0061FF] transition-colors line-clamp-1 flex-1 pr-2">{project.name}</h3>
+                    {project.statusId && data.projectStatuses && (
+                      (() => {
+                        const status = data.projectStatuses.find(s => s.id === project.statusId);
+                        return status ? (
+                          <span 
+                            className="px-2 py-0.5 text-[9px] font-bold rounded-full text-white flex-shrink-0"
+                            style={{ backgroundColor: status.color || '#0061FF' }}
+                          >
+                            {status.name}
+                          </span>
+                        ) : null;
+                      })()
+                    )}
+                  </div>
                   
                   <div className="mt-3 space-y-2">
-                    <div className="flex items-start gap-2 text-slate-600">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="text-slate-500">
+                        <span className="block text-[10px] uppercase font-semibold opacity-70">{lang === 'th' ? 'ลูกค้า' : 'Customer'}</span>
+                        <span className="font-medium text-slate-700 truncate block">
+                          {data.customers.find(c => c.id === project.customerId)?.name || '-'}
+                        </span>
+                      </div>
+                      <div className="text-slate-500">
+                        <span className="block text-[10px] uppercase font-semibold opacity-70">{lang === 'th' ? 'เจ้าของโครงการ' : 'Project Owner'}</span>
+                        <span className="font-medium text-slate-700 truncate block">
+                          {data.owners.find(o => o.id === project.ownerId)?.name || '-'}
+                        </span>
+                      </div>
+                      <div className="text-slate-500">
+                        <span className="block text-[10px] uppercase font-semibold opacity-70">{lang === 'th' ? 'ฝ่ายขาย' : 'Sales'}</span>
+                        <span className="font-medium text-slate-700 truncate block">
+                          {data.salespersons.find(s => s.id === project.salespersonId)?.name || '-'}
+                        </span>
+                      </div>
+                      <div className="text-slate-500">
+                        <span className="block text-[10px] uppercase font-semibold opacity-70">{lang === 'th' ? 'ผจก.โครงการ' : 'PM'}</span>
+                        <span className="font-medium text-slate-700 truncate block">
+                          {data.projectManagers.find(m => m.id === project.managerId)?.name || '-'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="pt-2 flex items-start gap-2 text-slate-600 border-t border-slate-100">
                       <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-[#FF5E00]" />
-                      <span className="text-xs line-clamp-2 leading-tight">{project.location || (lang === 'th' ? 'ไม่มีการตั้งค่าสถานที่' : 'No location set')}</span>
+                      <span className="text-xs line-clamp-1 leading-tight">{project.location || (lang === 'th' ? 'ไม่มีการตั้งค่าสถานที่' : 'No location set')}</span>
                     </div>
                     
                     <div className="flex items-center gap-2 text-slate-600">
@@ -151,7 +193,7 @@ export function Projects({ navigate }: ProjectsProps) {
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="text-[11px] text-slate-500 uppercase font-semibold">
-                        <span className="text-slate-700">{duration} {lang === 'th' ? 'วัน' : 'days'}</span>
+                        {lang === 'th' ? 'ระยะเวลาโครงการ: ' : 'Duration: '}<span className="text-slate-700">{duration} {lang === 'th' ? 'วัน' : 'days'}</span>
                       </div>
                       <div className="flex items-center gap-1 text-[#0061FF] font-medium text-xs group-hover:translate-x-1 transition-transform">
                         {lang === 'th' ? 'จัดการ' : 'Manage'} <ChevronRight className="w-3.5 h-3.5" />
@@ -168,10 +210,13 @@ export function Projects({ navigate }: ProjectsProps) {
             <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200">
               <tr>
                 <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'สถานที่' : 'Location'}</th>
+                <th className="p-3 font-semibold">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
+                <th className="p-3 font-semibold">{lang === 'th' ? 'ลูกค้า' : 'Customer'}</th>
+                <th className="p-3 font-semibold">{lang === 'th' ? 'เจ้าของโครงการ' : 'Project Owner'}</th>
+                <th className="p-3 font-semibold">{lang === 'th' ? 'ฝ่ายขาย' : 'Sales'}</th>
+                <th className="p-3 font-semibold">{lang === 'th' ? 'ผจก.โครงการ' : 'PM'}</th>
                 <th className="p-3 font-semibold">{lang === 'th' ? 'ความคืบหน้า' : 'Progress'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'ระยะเวลา' : 'Duration'}</th>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'จำนวนวัน' : 'Days'}</th>
+                <th className="p-3 font-semibold">{lang === 'th' ? 'ระยะเวลาโครงการ' : 'Duration'}</th>
                 <th className="p-3 font-semibold text-right">{lang === 'th' ? 'จัดการ' : 'Actions'}</th>
               </tr>
             </thead>
@@ -193,11 +238,32 @@ export function Projects({ navigate }: ProjectsProps) {
                     className="hover:bg-slate-50 cursor-pointer transition-colors group"
                   >
                     <td className="p-3 font-medium text-slate-800">{project.name}</td>
+                    <td className="p-3">
+                      {project.statusId && data.projectStatuses ? (
+                        (() => {
+                          const status = data.projectStatuses.find(s => s.id === project.statusId);
+                          return status ? (
+                            <span 
+                              className="px-2 py-1 text-[10px] font-bold rounded-full text-white"
+                              style={{ backgroundColor: status.color || '#0061FF' }}
+                            >
+                              {status.name}
+                            </span>
+                          ) : <span className="text-slate-400">-</span>;
+                        })()
+                      ) : <span className="text-slate-400">-</span>}
+                    </td>
                     <td className="p-3 text-slate-600 text-xs">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-[#FF5E00]" />
-                        <span className="line-clamp-1">{project.location || (lang === 'th' ? 'ไม่มีการตั้งค่าสถานที่' : 'No location set')}</span>
-                      </div>
+                      {data.customers.find(c => c.id === project.customerId)?.name || '-'}
+                    </td>
+                    <td className="p-3 text-slate-600 text-xs">
+                      {data.owners.find(o => o.id === project.ownerId)?.name || '-'}
+                    </td>
+                    <td className="p-3 text-slate-600 text-xs">
+                      {data.salespersons.find(s => s.id === project.salespersonId)?.name || '-'}
+                    </td>
+                    <td className="p-3 text-slate-600 text-xs">
+                      {data.projectManagers.find(m => m.id === project.managerId)?.name || '-'}
                     </td>
                     <td className="p-3 text-slate-600 text-xs">
                       <div className="flex items-center gap-2 w-32">
@@ -205,16 +271,6 @@ export function Projects({ navigate }: ProjectsProps) {
                           <div className="bg-[#22C55E] h-full rounded-full transition-all" style={{ width: `${progress}%` }} />
                         </div>
                         <span className="font-semibold text-slate-500 w-7">{progress}%</span>
-                      </div>
-                    </td>
-                    <td className="p-3 text-slate-600 text-xs">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-3.5 h-3.5 text-[#0061FF]" />
-                        <span>
-                          {project.startDate ? format(parseISO(project.startDate), 'dd/MM/yy') : 'TBD'} 
-                          {' - '} 
-                          {project.endDate ? format(parseISO(project.endDate), 'dd/MM/yy') : 'TBD'}
-                        </span>
                       </div>
                     </td>
                     <td className="p-3 text-slate-600 text-xs">{duration} {lang === 'th' ? 'วัน' : 'days'}</td>

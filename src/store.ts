@@ -7,6 +7,12 @@ const STORAGE_KEY = 'clickdo_v1_data';
 
 const initialState: AppState = {
   language: 'th',
+  projectStatuses: [
+    { id: 'status-1', name: 'กำลังดำเนินการ', color: '#0061FF' },
+    { id: 'status-2', name: 'ระงับ', color: '#FF5E00' },
+    { id: 'status-3', name: 'ปิดโครงการ', color: '#22C55E' },
+    { id: 'status-4', name: 'ยกเลิก', color: '#EF4444' }
+  ],
   customers: [],
   owners: [],
   salespersons: [],

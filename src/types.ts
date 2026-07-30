@@ -18,10 +18,17 @@ export interface ProjectManager {
   name: string;
 }
 
+export interface ProjectStatus {
+  id: string;
+  name: string;
+  color?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
   location: string;
+  installationArea?: string;
   startDate: string;
   endDate: string;
   actualCompletionDate: string;
@@ -30,6 +37,7 @@ export interface Project {
   salespersonId: string;
   managerId: string;
   contractorId?: string;
+  statusId?: string;
 }
 
 export interface ScopeOfWork {
@@ -126,6 +134,7 @@ export interface FileAsset {
 
 export interface AppState {
   language: 'th' | 'en';
+  projectStatuses: ProjectStatus[];
   customers: Customer[];
   owners: Owner[];
   salespersons: Salesperson[];

@@ -6,8 +6,9 @@ import { Plus, Trash2 } from 'lucide-react';
 export function MasterData() {
   const { data, updateData } = useAppStore();
   const lang = data.language || 'th';
-  const [activeTab, setActiveTab] = useState<'customers' | 'owners' | 'salespersons' | 'projectManagers' | 'contractorMaster'>('customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'owners' | 'salespersons' | 'projectManagers' | 'contractorMaster' | 'projectStatuses'>('customers');
   const [newItemName, setNewItemName] = useState('');
+  const [statusColor, setStatusColor] = useState('#0061FF');
   const [contractorForm, setContractorForm] = useState({
     company: '',
     firstName: '',
@@ -28,7 +29,10 @@ export function MasterData() {
     }
 
     if (!newItemName.trim()) return;
-    const newItem = { id: uuidv4(), name: newItemName };
+    const newItem = activeTab === 'projectStatuses' 
+      ? { id: uuidv4(), name: newItemName, color: statusColor }
+      : { id: uuidv4(), name: newItemName };
+      
     updateData({
       [activeTab]: [...data[activeTab], newItem]
     });
@@ -50,6 +54,7 @@ export function MasterData() {
     { id: 'salespersons', label: lang === 'th' ? 'พนักงานขาย' : 'Salespersons' },
     { id: 'projectManagers', label: lang === 'th' ? 'ผู้จัดการโครงการ' : 'Project Managers' },
     { id: 'contractorMaster', label: lang === 'th' ? 'ผู้รับเหมา' : 'Contractors' },
+    { id: 'projectStatuses', label: lang === 'th' ? 'สถานะโครงการ' : 'Project Statuses' },
   ];
 
   return (
@@ -81,6 +86,7 @@ export function MasterData() {
         <div className="p-6">
           {activeTab === 'contractorMaster' ? (
             <div className="mb-6 space-y-4">
+              {/* ... existing contractor form ... */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input
                   type="text"
@@ -140,6 +146,15 @@ export function MasterData() {
                 className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
               />
+              {activeTab === 'projectStatuses' && (
+                <input
+                  type="color"
+                  value={statusColor}
+                  onChange={(e) => setStatusColor(e.target.value)}
+                  className="w-12 h-[42px] p-1 border border-slate-300 rounded-lg cursor-pointer"
+                  title={lang === 'th' ? 'เลือกสีสถานะ' : 'Select status color'}
+                />
+              )}
               <button
                 onClick={handleAdd}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors"
@@ -168,6 +183,14 @@ export function MasterData() {
                         {item.phone && <span>{lang === 'th' ? 'โทร:' : 'Tel:'} {item.phone}</span>}
                       </div>
                       {item.note && <div className="text-xs text-slate-400 mt-1">{item.note}</div>}
+                    </div>
+                  ) : activeTab === 'projectStatuses' ? (
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="w-4 h-4 rounded-full border border-slate-200" 
+                        style={{ backgroundColor: item.color || '#0061FF' }}
+                      />
+                      <span className="font-medium text-slate-700">{item.name}</span>
                     </div>
                   ) : (
                     <span className="font-medium text-slate-700">{item.name}</span>
