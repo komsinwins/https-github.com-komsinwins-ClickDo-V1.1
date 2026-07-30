@@ -82,22 +82,13 @@ export function Dashboard() {
           <div className="h-[300px]">
             {projectsByCustomer.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={projectsByCustomer}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="count"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {projectsByCustomer.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip />
-                </PieChart>
+                <BarChart data={projectsByCustomer}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
+                  <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
+                  <RechartsTooltip cursor={{fill: '#f1f5f9'}} />
+                  <Bar dataKey="count" fill="#8884d8" radius={[4, 4, 0, 0]} barSize={40} />
+                </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400">{lang === 'th' ? 'ไม่มีข้อมูล' : 'No data available'}</div>
@@ -110,18 +101,71 @@ export function Dashboard() {
           <div className="h-[300px]">
             {projectsByPM.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={projectsByPM}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
-                  <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
-                  <RechartsTooltip cursor={{fill: '#f1f5f9'}} />
-                  <Bar dataKey="count" fill="#2563eb" radius={[4, 4, 0, 0]} barSize={40} />
-                </BarChart>
+                <PieChart>
+                  <Pie
+                    data={projectsByPM}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    fill="#2563eb"
+                    dataKey="count"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {projectsByPM.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip />
+                </PieChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400">{lang === 'th' ? 'ไม่มีข้อมูล' : 'No data available'}</div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-4 rounded-lg border border-slate-200">
+        <h3 className="text-sm font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-red-500"></span>
+          {lang === 'th' ? 'โครงการที่ใกล้ครบกำหนด (< 7 วัน)' : 'Projects Nearing Deadline (< 7 days)'}
+        </h3>
+        <div className="overflow-x-auto">
+          {endingSoon.length > 0 ? (
+            <table className="w-full text-left text-sm border-collapse min-w-[600px]">
+              <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200">
+                <tr>
+                  <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</th>
+                  <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อบริษัท' : 'Company'}</th>
+                  <th className="p-3 font-semibold">{lang === 'th' ? 'วันที่สิ้นสุดโครงการ' : 'End Date'}</th>
+                  <th className="p-3 font-semibold">{lang === 'th' ? 'เหลือเวลา' : 'Time Left'}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {endingSoon.map(project => {
+                  const daysLeft = differenceInDays(parseISO(project.endDate), today);
+                  return (
+                    <tr key={project.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-3 font-medium text-slate-800">{project.name}</td>
+                      <td className="p-3 text-slate-600">
+                        {data.customers.find(c => c.id === project.customerId)?.name || '-'}
+                      </td>
+                      <td className="p-3 text-slate-600">
+                        {project.endDate}
+                      </td>
+                      <td className="p-3 text-red-600 font-medium">
+                        {daysLeft} {lang === 'th' ? 'วัน' : 'days'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <div className="text-center py-6 text-slate-400">
+              {lang === 'th' ? 'ไม่มีโครงการที่ใกล้ครบกำหนด' : 'No projects nearing deadline'}
+            </div>
+          )}
         </div>
       </div>
 
