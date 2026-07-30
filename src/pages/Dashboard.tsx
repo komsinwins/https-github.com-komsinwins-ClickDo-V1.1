@@ -82,12 +82,12 @@ export function Dashboard() {
           <div className="h-[300px]">
             {projectsByCustomer.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={projectsByCustomer}>
+                <BarChart data={projectsByCustomer} margin={{ bottom: 80, right: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11}} angle={-45} textAnchor="end" interval={0} height={80} />
                   <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
                   <RechartsTooltip cursor={{fill: '#f1f5f9'}} />
-                  <Bar dataKey="count" fill="#8884d8" radius={[4, 4, 0, 0]} barSize={40} />
+                  <Bar dataKey="count" fill="#8884d8" radius={[4, 4, 0, 0]} barSize={30} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
