@@ -14,7 +14,7 @@ export function WorkersVehicles({ projectId }: { projectId: string }) {
   const vehicles = data.vehicles.filter(v => v.projectId === projectId);
 
   const addWorker = () => {
-    const newWorker: Worker = { id: uuidv4(), projectId, firstName: '', lastName: '', phone: '' };
+    const newWorker: Worker = { id: uuidv4(), projectId, firstName: '', lastName: '', phone: '', role: '' };
     updateData({ workers: [...data.workers, newWorker] });
   };
 
@@ -74,14 +74,14 @@ export function WorkersVehicles({ projectId }: { projectId: string }) {
 
       <div id="export-container" className="space-y-8 bg-white p-2">
         <div className="text-center mb-6 hidden print:block">
-          <h2 className="text-2xl font-bold">{lang === 'th' ? 'บันทึกคนงานและยานพาหนะ' : 'Workers & Vehicles Log'}</h2>
+          <h2 className="text-2xl font-bold">{lang === 'th' ? 'บันทึกผู้ปฎิบัติงานและยานพาหนะ' : 'Workers & Vehicles Log'}</h2>
           <p className="text-slate-500">{lang === 'th' ? 'โครงการ:' : 'Project:'} {project?.name}</p>
         </div>
 
         {/* Workers Table */}
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-            <h3 className="font-bold text-slate-800">{lang === 'th' ? 'รายชื่อคนงาน' : 'Workers'}</h3>
+            <h3 className="font-bold text-slate-800">{lang === 'th' ? 'รายชื่อผู้ปฎิบัติงาน' : 'Workers'}</h3>
             <button onClick={addWorker} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg">
               <Plus className="w-5 h-5" />
             </button>
@@ -91,17 +91,19 @@ export function WorkersVehicles({ projectId }: { projectId: string }) {
               <tr>
                 <th className="p-3 font-medium">{lang === 'th' ? 'ชื่อ' : 'First Name'}</th>
                 <th className="p-3 font-medium">{lang === 'th' ? 'นามสกุล' : 'Last Name'}</th>
+                <th className="p-3 font-medium">{lang === 'th' ? 'หน้าที่ในโครงการ' : 'Project Role'}</th>
                 <th className="p-3 font-medium">{lang === 'th' ? 'เบอร์โทรศัพท์ (ไม่บังคับ)' : 'Phone (Optional)'}</th>
                 <th className="p-3 font-medium text-right w-16"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {workers.length === 0 ? (
-                <tr><td colSpan={4} className="p-4 text-center text-slate-500">{lang === 'th' ? 'ไม่มีข้อมูลคนงาน' : 'No workers added.'}</td></tr>
+                <tr><td colSpan={5} className="p-4 text-center text-slate-500">{lang === 'th' ? 'ไม่มีข้อมูลผู้ปฎิบัติงาน' : 'No workers added.'}</td></tr>
               ) : workers.map(w => (
                 <tr key={w.id} className="hover:bg-slate-50">
                   <td className="p-2"><input type="text" value={w.firstName} onChange={e => updateWorker(w.id, 'firstName', e.target.value)} className="w-full p-2 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded" placeholder={lang === 'th' ? 'ชื่อ' : 'First Name'}/></td>
                   <td className="p-2"><input type="text" value={w.lastName} onChange={e => updateWorker(w.id, 'lastName', e.target.value)} className="w-full p-2 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded" placeholder={lang === 'th' ? 'นามสกุล' : 'Last Name'}/></td>
+                  <td className="p-2"><input type="text" value={w.role || ''} onChange={e => updateWorker(w.id, 'role', e.target.value)} className="w-full p-2 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded" placeholder={lang === 'th' ? 'หน้าที่' : 'Role'}/></td>
                   <td className="p-2"><input type="text" value={w.phone || ''} onChange={e => updateWorker(w.id, 'phone', e.target.value)} className="w-full p-2 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded" placeholder={lang === 'th' ? 'เบอร์โทรศัพท์' : 'Phone'}/></td>
                   <td className="p-2 text-right">
                     <button onClick={() => deleteWorker(w.id)} className="p-2 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>

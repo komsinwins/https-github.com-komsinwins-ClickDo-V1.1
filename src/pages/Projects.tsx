@@ -12,7 +12,12 @@ export function Projects({ navigate }: ProjectsProps) {
   const { data, updateData } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'board'>('grid');
+  const [sortBy, setSortBy] = useState<'active-first' | 'name-asc' | 'date-desc' | 'date-asc'>('active-first');
   const lang = data.language || 'th';
+
+  const isProjectClosed = (p: any) => {
+    return !!p.actualCompletionDate || (p.statusId && data.projectStatuses?.find(s => s.id === p.statusId)?.name === 'ปิดโครงการ');
+  };
 
   const createNewProject = () => {
     const newProject = {
@@ -52,6 +57,26 @@ export function Projects({ navigate }: ProjectsProps) {
            manager.includes(searchLower);
   });
 
+  const sortedProjects = [...filteredProjects].sort((a, b) => {
+    if (sortBy === 'active-first') {
+      const aClosed = isProjectClosed(a);
+      const bClosed = isProjectClosed(b);
+      if (aClosed && !bClosed) return 1;
+      if (!aClosed && bClosed) return -1;
+      return new Date(b.startDate || 0).getTime() - new Date(a.startDate || 0).getTime();
+    }
+    if (sortBy === 'name-asc') {
+      return a.name.localeCompare(b.name);
+    }
+    if (sortBy === 'date-desc') {
+      return new Date(b.startDate || 0).getTime() - new Date(a.startDate || 0).getTime();
+    }
+    if (sortBy === 'date-asc') {
+      return new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime();
+    }
+    return 0;
+  });
+
   return (
     <div className="w-full space-y-4">
       <div className="flex justify-between items-center border-b border-slate-200 pb-3">
@@ -79,8 +104,22 @@ export function Projects({ navigate }: ProjectsProps) {
             className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#0061FF] focus:bg-white transition-all"
           />
         </div>
-        <div className="flex bg-slate-100 p-1 rounded-md">
-          <button
+        <div className="flex gap-4 items-center">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-600">{lang === 'th' ? 'เรียงตาม:' : 'Sort by:'}</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="text-sm border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
+            >
+              <option value="active-first">{lang === 'th' ? 'ดำเนินการอยู่ก่อน' : 'Active First'}</option>
+              <option value="name-asc">{lang === 'th' ? 'ชื่อ (A-Z)' : 'Name (A-Z)'}</option>
+              <option value="date-desc">{lang === 'th' ? 'วันที่เริ่ม (ใหม่สุด)' : 'Start Date (Newest)'}</option>
+              <option value="date-asc">{lang === 'th' ? 'วันที่เริ่ม (เก่าสุด)' : 'Start Date (Oldest)'}</option>
+            </select>
+          </div>
+          <div className="flex bg-slate-100 p-1 rounded-md">
+            <button
             onClick={() => setViewMode('list')}
             className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-500 hover:text-slate-800'}`}
             title={lang === 'th' ? 'มุมมองแบบรายการ' : 'List View'}
@@ -102,12 +141,13 @@ export function Projects({ navigate }: ProjectsProps) {
             <FolderKanban className="w-4 h-4" />
           </button>
         </div>
+        </div>
       </div>
 
       {viewMode === 'board' ? (
         <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-220px)] items-start scrollbar-thin scrollbar-thumb-slate-300">
           {[...(data.projectStatuses || []), { id: '', name: lang === 'th' ? 'ไม่มีสถานะ' : 'No Status', color: '#cbd5e1' }].map(status => {
-            const columnProjects = filteredProjects.filter(p => (p.statusId || '') === status.id);
+            const columnProjects = sortedProjects.filter(p => (p.statusId || '') === status.id);
             if (!status.id && columnProjects.length === 0) return null;
             return (
               <div key={status.id} className="min-w-[280px] w-[280px] bg-slate-50/80 border border-slate-200 rounded-lg p-3 flex flex-col max-h-full flex-shrink-0">
@@ -162,7 +202,7 @@ export function Projects({ navigate }: ProjectsProps) {
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredProjects.map((project) => {
+          {sortedProjects.map((project) => {
             const duration = project.startDate && project.endDate 
               ? differenceInDays(parseISO(project.endDate), parseISO(project.startDate)) 
               : 0;
@@ -284,7 +324,7 @@ export function Projects({ navigate }: ProjectsProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredProjects.map((project) => {
+              {sortedProjects.map((project) => {
                 const duration = project.startDate && project.endDate 
                   ? differenceInDays(parseISO(project.endDate), parseISO(project.startDate)) 
                   : 0;

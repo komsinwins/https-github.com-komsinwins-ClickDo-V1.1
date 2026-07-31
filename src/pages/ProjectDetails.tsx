@@ -33,7 +33,7 @@ export function ProjectDetails({ projectId, tab, navigate }: Props) {
     { id: 'timeline', label: lang === 'th' ? 'ตารางเวลา (Gantt)' : 'Timeline (Gantt)' },
     { id: 'schedule', label: lang === 'th' ? 'แผนงาน' : 'Schedule Plan' },
     { id: 'contractors', label: lang === 'th' ? 'ผู้รับเหมา' : 'Contractors' },
-    { id: 'workers', label: lang === 'th' ? 'คนงาน & ยานพาหนะ' : 'Workers & Vehicles' },
+    { id: 'workers', label: lang === 'th' ? 'ผู้ปฎิบัติงาน & ยานพาหนะ' : 'Workers & Vehicles' },
     { id: 'contacts', label: lang === 'th' ? 'รายชื่อติดต่อ' : 'Contacts' },
     { id: 'reports', label: lang === 'th' ? 'รายงาน' : 'Reports' },
     { id: 'closeout', label: lang === 'th' ? 'รายงานสรุปโครงการ' : 'Project Summary Report' },

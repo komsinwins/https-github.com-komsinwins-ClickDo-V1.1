@@ -199,7 +199,7 @@ export function Dashboard({ navigate }: DashboardProps = {}) {
                     <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</th>
                     <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่อบริษัท' : 'Company'}</th>
                     <th className="p-3 font-semibold">{lang === 'th' ? 'วันที่ปิดโครงการ' : 'Completion Date'}</th>
-                    <th className="p-3 font-semibold">{lang === 'th' ? 'ระยะเวลาจริง' : 'Actual Duration'}</th>
+                    <th className="p-3 font-semibold">{lang === 'th' ? 'ระยะเวลาดำเนินงาน' : 'Actual Duration'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">

@@ -90,6 +90,7 @@ export interface Worker {
   firstName: string;
   lastName: string;
   phone: string;
+  role?: string;
 }
 
 export interface Vehicle {
