@@ -22,6 +22,13 @@ export function MasterData() {
   const handleAddLocation = (ownerId: string) => {
     const loc = newLocation[ownerId]?.trim();
     if (!loc) return;
+    
+    const owner = data.owners.find(o => o.id === ownerId);
+    if (owner?.installationLocations?.some(l => l.trim().toLowerCase() === loc.toLowerCase())) {
+      alert(lang === 'th' ? 'มีสถานที่นี้อยู่แล้ว ไม่สามารถเพิ่มข้อมูลซ้ำได้' : 'Duplicate location. Cannot add duplicate data.');
+      return;
+    }
+
     const owners = data.owners.map(o => {
       if (o.id === ownerId) {
         return { ...o, installationLocations: [...(o.installationLocations || []), loc] };
@@ -49,6 +56,16 @@ export function MasterData() {
   const handleAdd = () => {
     if (activeTab === 'contractorMaster') {
       if (!contractorForm.firstName.trim() || !contractorForm.lastName.trim()) return;
+      
+      const isDuplicate = (data.contractorMaster || []).some(
+        (c: any) => c.firstName.trim().toLowerCase() === contractorForm.firstName.trim().toLowerCase() && 
+                    c.lastName.trim().toLowerCase() === contractorForm.lastName.trim().toLowerCase()
+      );
+      if (isDuplicate) {
+        alert(lang === 'th' ? 'มีชื่อและนามสกุลนี้อยู่แล้ว ไม่สามารถเพิ่มข้อมูลซ้ำได้' : 'Duplicate name. Cannot add duplicate data.');
+        return;
+      }
+
       const newItem = { id: uuidv4(), ...contractorForm };
       updateData({
         contractorMaster: [...(data.contractorMaster || []), newItem]
@@ -58,6 +75,15 @@ export function MasterData() {
     }
 
     if (!newItemName.trim()) return;
+    
+    const isDuplicate = (data[activeTab] || []).some(
+      (item: any) => item.name.trim().toLowerCase() === newItemName.trim().toLowerCase()
+    );
+    if (isDuplicate) {
+      alert(lang === 'th' ? 'มีชื่อนี้อยู่แล้ว ไม่สามารถเพิ่มข้อมูลซ้ำได้' : 'Duplicate name. Cannot add duplicate data.');
+      return;
+    }
+
     const newItem = activeTab === 'projectStatuses' 
       ? { id: uuidv4(), name: newItemName, color: statusColor }
       : { id: uuidv4(), name: newItemName };
