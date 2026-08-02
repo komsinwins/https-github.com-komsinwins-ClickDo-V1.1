@@ -390,19 +390,7 @@ export function Closeout({ projectId }: { projectId: string }) {
           </div>
         </div>
         
-        {/* Signatures */}
-        <div className="mt-16 grid grid-cols-2 gap-16 break-inside-avoid">
-          <div className="text-center">
-            <div className="border-b-2 border-slate-400 w-48 mx-auto mb-2"></div>
-            <p className="text-sm font-semibold">{ownerName || (lang === 'th' ? 'เจ้าของโครงการ' : 'Project Owner')}</p>
-            <p className="text-xs text-slate-500">{lang === 'th' ? 'ผู้ส่งมอบงาน' : 'Submitted By'}</p>
-          </div>
-          <div className="text-center">
-            <div className="border-b-2 border-slate-400 w-48 mx-auto mb-2"></div>
-            <p className="text-sm font-semibold">{managerName || (lang === 'th' ? 'ผู้จัดการโครงการ' : 'Project Manager')}</p>
-            <p className="text-xs text-slate-500">{lang === 'th' ? 'ผู้รับมอบงาน' : 'Approved By'}</p>
-          </div>
-        </div>
+
 
         {/* Section 8: Photos (Appendix) */}
         {photos.length > 0 && (
