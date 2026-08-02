@@ -236,16 +236,28 @@ export function Closeout({ projectId }: { projectId: string }) {
       </div>
 
       {/* Hidden PDF Export Template */}
-      <div className="hidden print:block w-full bg-white text-black font-sans print:p-8">
-        <div className="text-center mb-8 border-b-4 border-slate-800 pb-4">
-          <h1 className="text-3xl font-extrabold uppercase tracking-tight">{lang === 'th' ? 'รายงานสรุปโครงการ' : 'Project Summary Report'}</h1>
-          <p className="text-slate-500 mt-2 text-sm">{project?.name}</p>
+      <div className="hidden print:block w-full bg-white text-black font-sans">
+        
+        {/* Document Header */}
+        <div className="flex justify-between items-start border-b-4 border-slate-800 pb-6 mb-8">
+          <div className="flex items-center gap-4">
+            {/* Placeholder for Logo */}
+            <div className="w-20 h-20 bg-slate-100 border-2 border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-xs">LOGO</div>
+            <div>
+              <h1 className="text-3xl font-extrabold uppercase tracking-tight text-slate-900">{lang === 'th' ? 'รายงานสรุปโครงการ' : 'Project Summary Report'}</h1>
+              <p className="text-slate-600 mt-1 font-medium">{project?.name}</p>
+            </div>
+          </div>
+          <div className="text-right text-sm text-slate-600 space-y-1">
+            <p><span className="font-semibold">{lang === 'th' ? 'วันที่พิมพ์:' : 'Print Date:'}</span> {formatDate(new Date().toISOString())}</p>
+            <p><span className="font-semibold">{lang === 'th' ? 'รหัสโครงการ:' : 'Project ID:'}</span> {project?.id?.slice(0, 8).toUpperCase()}</p>
+          </div>
         </div>
         
         {/* Section 1: Project Details */}
         <div className="mb-8 break-inside-avoid">
-          <h2 className="text-xl font-bold bg-slate-100 p-2 border-l-4 border-slate-800 mb-4">1. {lang === 'th' ? 'รายละเอียดโครงการ' : 'Project Details'}</h2>
-          <div className="border border-slate-300 rounded-lg p-4">
+          <h2 className="text-lg font-bold bg-slate-800 text-white p-2 px-4 mb-4 rounded-t">1. {lang === 'th' ? 'รายละเอียดโครงการ' : 'Project Details'}</h2>
+          <div className="border-2 border-slate-800 rounded-b p-5 -mt-4 bg-white">
             <table className="w-full text-sm">
               <tbody>
                 <tr>
@@ -275,25 +287,25 @@ export function Closeout({ projectId }: { projectId: string }) {
               </tbody>
             </table>
             {project?.projectDetails && (
-              <div className="mt-4 pt-4 border-t border-slate-200 text-sm">
-                <p className="font-semibold text-slate-700 mb-1">{lang === 'th' ? 'รายละเอียดเพิ่มเติม:' : 'Additional Details:'}</p>
-                <p className="whitespace-pre-wrap text-slate-800">{project.projectDetails}</p>
+              <div className="mt-4 pt-4 border-t-2 border-slate-200 text-sm">
+                <p className="font-semibold text-slate-700 mb-2">{lang === 'th' ? 'รายละเอียดเพิ่มเติม:' : 'Additional Details:'}</p>
+                <p className="whitespace-pre-wrap text-slate-800 bg-slate-50 p-3 rounded border border-slate-200">{project.projectDetails}</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-2 gap-8 mb-8">
           {/* Section 2: Stakeholders */}
           <div className="break-inside-avoid">
-            <h2 className="text-xl font-bold bg-slate-100 p-2 border-l-4 border-slate-800 mb-4">2. {lang === 'th' ? 'ผู้เกี่ยวข้องในโครงการ' : 'Stakeholders'}</h2>
-            <div className="border border-slate-300 rounded-lg overflow-hidden">
+            <h2 className="text-lg font-bold bg-slate-800 text-white p-2 px-4 mb-4 rounded-t">2. {lang === 'th' ? 'ผู้เกี่ยวข้องในโครงการ' : 'Stakeholders'}</h2>
+            <div className="border-2 border-slate-800 rounded-b overflow-hidden -mt-4 bg-white">
               <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 border-b border-slate-300">
+                <thead className="bg-slate-100 border-b-2 border-slate-800">
                   <tr>
-                    <th className="p-3 font-semibold text-slate-700">{lang === 'th' ? 'ชื่อ - นามสกุล' : 'Name'}</th>
-                    <th className="p-3 font-semibold text-slate-700">{lang === 'th' ? 'หน้าที่' : 'Role'}</th>
-                    <th className="p-3 font-semibold text-slate-700">{lang === 'th' ? 'เบอร์โทร' : 'Phone'}</th>
+                    <th className="p-3 font-semibold text-slate-800">{lang === 'th' ? 'ชื่อ - นามสกุล' : 'Name'}</th>
+                    <th className="p-3 font-semibold text-slate-800">{lang === 'th' ? 'หน้าที่' : 'Role'}</th>
+                    <th className="p-3 font-semibold text-slate-800">{lang === 'th' ? 'เบอร์โทร' : 'Phone'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -304,7 +316,7 @@ export function Closeout({ projectId }: { projectId: string }) {
                       <td className="p-3">{c.phone || '-'}</td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={3} className="p-4 text-center text-slate-500">{lang === 'th' ? 'ไม่มีข้อมูล' : 'No data'}</td></tr>
+                    <tr><td colSpan={3} className="p-4 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูล' : 'No data'}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -313,14 +325,14 @@ export function Closeout({ projectId }: { projectId: string }) {
 
           {/* Section 3: Workers */}
           <div className="break-inside-avoid">
-            <h2 className="text-xl font-bold bg-slate-100 p-2 border-l-4 border-slate-800 mb-4">3. {lang === 'th' ? 'ผู้ปฏิบัติงาน' : 'Workers'}</h2>
-            <div className="border border-slate-300 rounded-lg overflow-hidden">
+            <h2 className="text-lg font-bold bg-slate-800 text-white p-2 px-4 mb-4 rounded-t">3. {lang === 'th' ? 'ผู้ปฏิบัติงาน' : 'Workers'}</h2>
+            <div className="border-2 border-slate-800 rounded-b overflow-hidden -mt-4 bg-white">
               <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 border-b border-slate-300">
+                <thead className="bg-slate-100 border-b-2 border-slate-800">
                   <tr>
-                    <th className="p-3 font-semibold text-slate-700">{lang === 'th' ? 'ชื่อ - นามสกุล' : 'Name'}</th>
-                    <th className="p-3 font-semibold text-slate-700">{lang === 'th' ? 'หน้าที่' : 'Role'}</th>
-                    <th className="p-3 font-semibold text-slate-700">{lang === 'th' ? 'เบอร์โทร' : 'Phone'}</th>
+                    <th className="p-3 font-semibold text-slate-800">{lang === 'th' ? 'ชื่อ - นามสกุล' : 'Name'}</th>
+                    <th className="p-3 font-semibold text-slate-800">{lang === 'th' ? 'หน้าที่' : 'Role'}</th>
+                    <th className="p-3 font-semibold text-slate-800">{lang === 'th' ? 'เบอร์โทร' : 'Phone'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -331,7 +343,7 @@ export function Closeout({ projectId }: { projectId: string }) {
                       <td className="p-3">{w.phone || '-'}</td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={3} className="p-4 text-center text-slate-500">{lang === 'th' ? 'ไม่มีข้อมูล' : 'No data'}</td></tr>
+                    <tr><td colSpan={3} className="p-4 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูล' : 'No data'}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -341,23 +353,27 @@ export function Closeout({ projectId }: { projectId: string }) {
 
         {/* Section 4: Scopes */}
         <div className="mb-8 break-inside-avoid">
-           <h2 className="text-xl font-bold bg-slate-100 p-2 border-l-4 border-slate-800 mb-4">4. {lang === 'th' ? 'ขอบเขตงานและขั้นตอนการทำงาน' : 'Scope of Work & Schedule'}</h2>
-           <div className="border border-slate-300 rounded-lg overflow-hidden">
+           <h2 className="text-lg font-bold bg-slate-800 text-white p-2 px-4 mb-4 rounded-t">4. {lang === 'th' ? 'ขอบเขตงานและขั้นตอนการทำงาน' : 'Scope of Work & Schedule'}</h2>
+           <div className="border-2 border-slate-800 rounded-b overflow-hidden -mt-4 bg-white">
              <table className="w-full text-sm text-left">
-               <thead className="bg-slate-50 border-b border-slate-300">
+               <thead className="bg-slate-100 border-b-2 border-slate-800">
                  <tr>
-                   <th className="p-3 font-semibold text-slate-700">{lang === 'th' ? 'ชื่องาน' : 'Task'}</th>
-                   <th className="p-3 font-semibold text-slate-700 text-center w-32">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
+                   <th className="p-3 font-semibold text-slate-800">{lang === 'th' ? 'ชื่องาน' : 'Task'}</th>
+                   <th className="p-3 font-semibold text-slate-800 text-center w-40">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
                  </tr>
                </thead>
                <tbody className="divide-y divide-slate-200">
                  {scopes.length > 0 ? scopes.map(s => (
                    <tr key={s.id}>
                      <td className="p-3">{s.taskName}</td>
-                     <td className="p-3 text-center font-medium">{s.progress === 100 ? (lang === 'th' ? 'เสร็จสิ้น' : 'Completed') : `${s.progress}%`}</td>
+                     <td className="p-3 text-center">
+                       <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${s.progress === 100 ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
+                         {s.progress === 100 ? (lang === 'th' ? 'เสร็จสิ้น 100%' : 'Completed 100%') : `${s.progress}%`}
+                       </span>
+                     </td>
                    </tr>
                  )) : (
-                   <tr><td colSpan={2} className="p-4 text-center text-slate-500">{lang === 'th' ? 'ไม่มีข้อมูลงาน' : 'No tasks available'}</td></tr>
+                   <tr><td colSpan={2} className="p-4 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูลงาน' : 'No tasks available'}</td></tr>
                  )}
                </tbody>
              </table>
@@ -366,33 +382,56 @@ export function Closeout({ projectId }: { projectId: string }) {
 
         {/* Sections 5, 6, 7 */}
         <div className="mb-8 grid grid-cols-1 gap-6 break-inside-avoid">
-          <div className="border border-slate-300 rounded-lg p-4">
-            <h2 className="text-lg font-bold text-slate-800 mb-2 border-b border-slate-200 pb-2">5. {lang === 'th' ? 'ปัญหาและอุปสรรค' : 'Problems & Obstacles'}</h2>
-            <p className="text-sm whitespace-pre-wrap text-slate-700 mt-2">{problems || '-'}</p>
+          <div className="border-2 border-slate-800 rounded-lg p-5 bg-white relative mt-3">
+            <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">5. {lang === 'th' ? 'ปัญหาและอุปสรรค' : 'Problems & Obstacles'}</h2>
+            <p className="text-sm whitespace-pre-wrap text-slate-700">{problems || '-'}</p>
           </div>
-          <div className="border border-slate-300 rounded-lg p-4">
-            <h2 className="text-lg font-bold text-slate-800 mb-2 border-b border-slate-200 pb-2">6. {lang === 'th' ? 'สรุปผลการดำเนินงาน' : 'Operations Summary'}</h2>
-            <p className="text-sm whitespace-pre-wrap text-slate-700 mt-2">{solutions || '-'}</p>
+          <div className="border-2 border-slate-800 rounded-lg p-5 bg-white relative mt-3">
+            <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">6. {lang === 'th' ? 'สรุปผลการดำเนินงาน' : 'Operations Summary'}</h2>
+            <p className="text-sm whitespace-pre-wrap text-slate-700">{solutions || '-'}</p>
           </div>
-          <div className="border border-slate-300 rounded-lg p-4">
-            <h2 className="text-lg font-bold text-slate-800 mb-2 border-b border-slate-200 pb-2">7. {lang === 'th' ? 'หมายเหตุ' : 'Notes'}</h2>
-            <p className="text-sm whitespace-pre-wrap text-slate-700 mt-2">{remarks || '-'}</p>
+          <div className="border-2 border-slate-800 rounded-lg p-5 bg-white relative mt-3">
+            <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">7. {lang === 'th' ? 'หมายเหตุ' : 'Notes'}</h2>
+            <p className="text-sm whitespace-pre-wrap text-slate-700">{remarks || '-'}</p>
+          </div>
+        </div>
+        
+        {/* Signatures */}
+        <div className="mt-16 grid grid-cols-2 gap-16 break-inside-avoid">
+          <div className="text-center">
+            <div className="border-b-2 border-slate-400 w-48 mx-auto mb-2"></div>
+            <p className="text-sm font-semibold">{ownerName || (lang === 'th' ? 'เจ้าของโครงการ' : 'Project Owner')}</p>
+            <p className="text-xs text-slate-500">{lang === 'th' ? 'ผู้ส่งมอบงาน' : 'Submitted By'}</p>
+          </div>
+          <div className="text-center">
+            <div className="border-b-2 border-slate-400 w-48 mx-auto mb-2"></div>
+            <p className="text-sm font-semibold">{managerName || (lang === 'th' ? 'ผู้จัดการโครงการ' : 'Project Manager')}</p>
+            <p className="text-xs text-slate-500">{lang === 'th' ? 'ผู้รับมอบงาน' : 'Approved By'}</p>
           </div>
         </div>
 
         {/* Section 8: Photos (Appendix) */}
         {photos.length > 0 && (
           <div className="break-before-page pt-8">
-            <div className="text-center mb-8 border-b-4 border-slate-800 pb-4">
-              <h1 className="text-3xl font-extrabold uppercase tracking-tight">{lang === 'th' ? 'ภาคผนวก' : 'Appendix'}</h1>
-              <p className="text-slate-500 mt-2 text-sm">{lang === 'th' ? 'รูปภาพประกอบโครงการ' : 'Attached Photos'}</p>
+            <div className="flex justify-between items-start border-b-4 border-slate-800 pb-6 mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 bg-slate-100 border-2 border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-xs">LOGO</div>
+                <div>
+                  <h1 className="text-3xl font-extrabold uppercase tracking-tight text-slate-900">{lang === 'th' ? 'ภาคผนวก' : 'Appendix'}</h1>
+                  <p className="text-slate-600 mt-1 font-medium">{lang === 'th' ? 'รูปภาพประกอบโครงการ' : 'Attached Photos'}</p>
+                </div>
+              </div>
+              <div className="text-right text-sm text-slate-600 space-y-1">
+                <p><span className="font-semibold">{lang === 'th' ? 'วันที่พิมพ์:' : 'Print Date:'}</span> {formatDate(new Date().toISOString())}</p>
+                <p><span className="font-semibold">{lang === 'th' ? 'รหัสโครงการ:' : 'Project ID:'}</span> {project?.id?.slice(0, 8).toUpperCase()}</p>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-8">
               {photos.map((p, i) => (
                 <div key={i} className="mb-6 break-inside-avoid">
-                  <div className="border border-slate-300 rounded-lg overflow-hidden bg-slate-50 p-2 shadow-sm">
-                    <img src={p.url} alt={`รูป ${i+1}`} className="w-full h-64 object-contain bg-white mb-3 rounded" />
-                    <p className="text-sm text-center text-slate-800 font-medium px-2 pb-2">{p.caption || `รูปที่ ${i+1}`}</p>
+                  <div className="border-2 border-slate-800 rounded-lg overflow-hidden bg-white p-3">
+                    <img src={p.url} alt={`รูป ${i+1}`} className="w-full h-64 object-cover border border-slate-200 mb-3 rounded" />
+                    <p className="text-sm text-center text-slate-800 font-bold px-2 pb-1">{p.caption || (lang === 'th' ? `รูปที่ ${i+1}` : `Photo ${i+1}`)}</p>
                   </div>
                 </div>
               ))}
