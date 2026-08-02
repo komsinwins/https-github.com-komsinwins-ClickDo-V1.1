@@ -367,22 +367,22 @@ export function Closeout({ projectId }: { projectId: string }) {
         {/* Sections 5, 6, 7 */}
         <div className="mb-8 grid grid-cols-1 gap-6 break-inside-avoid">
           <div className="border border-slate-300 rounded-lg p-4">
-            <h2 className="text-lg font-bold text-slate-800 mb-2">5. {lang === 'th' ? 'ปัญหาและอุปสรรค' : 'Problems & Obstacles'}</h2>
-            <p className="text-sm whitespace-pre-wrap text-slate-700">{problems || '-'}</p>
+            <h2 className="text-lg font-bold text-slate-800 mb-2 border-b border-slate-200 pb-2">5. {lang === 'th' ? 'ปัญหาและอุปสรรค' : 'Problems & Obstacles'}</h2>
+            <p className="text-sm whitespace-pre-wrap text-slate-700 mt-2">{problems || '-'}</p>
           </div>
           <div className="border border-slate-300 rounded-lg p-4">
-            <h2 className="text-lg font-bold text-slate-800 mb-2">6. {lang === 'th' ? 'สรุปผลการดำเนินงาน' : 'Operations Summary'}</h2>
-            <p className="text-sm whitespace-pre-wrap text-slate-700">{solutions || '-'}</p>
+            <h2 className="text-lg font-bold text-slate-800 mb-2 border-b border-slate-200 pb-2">6. {lang === 'th' ? 'สรุปผลการดำเนินงาน' : 'Operations Summary'}</h2>
+            <p className="text-sm whitespace-pre-wrap text-slate-700 mt-2">{solutions || '-'}</p>
           </div>
           <div className="border border-slate-300 rounded-lg p-4">
-            <h2 className="text-lg font-bold text-slate-800 mb-2">7. {lang === 'th' ? 'หมายเหตุ' : 'Notes'}</h2>
-            <p className="text-sm whitespace-pre-wrap text-slate-700">{remarks || '-'}</p>
+            <h2 className="text-lg font-bold text-slate-800 mb-2 border-b border-slate-200 pb-2">7. {lang === 'th' ? 'หมายเหตุ' : 'Notes'}</h2>
+            <p className="text-sm whitespace-pre-wrap text-slate-700 mt-2">{remarks || '-'}</p>
           </div>
         </div>
 
         {/* Section 8: Photos (Appendix) */}
         {photos.length > 0 && (
-          <div className="mt-8" style={{ pageBreakBefore: 'always' }}>
+          <div className="break-before-page pt-8">
             <div className="text-center mb-8 border-b-4 border-slate-800 pb-4">
               <h1 className="text-3xl font-extrabold uppercase tracking-tight">{lang === 'th' ? 'ภาคผนวก' : 'Appendix'}</h1>
               <p className="text-slate-500 mt-2 text-sm">{lang === 'th' ? 'รูปภาพประกอบโครงการ' : 'Attached Photos'}</p>
@@ -390,8 +390,8 @@ export function Closeout({ projectId }: { projectId: string }) {
             <div className="grid grid-cols-2 gap-6">
               {photos.map((p, i) => (
                 <div key={i} className="mb-6 break-inside-avoid">
-                  <div className="border border-slate-300 rounded-lg overflow-hidden bg-slate-50 p-2">
-                    <img src={p.url} alt={`รูป ${i+1}`} className="w-full h-64 object-contain bg-white mb-3" />
+                  <div className="border border-slate-300 rounded-lg overflow-hidden bg-slate-50 p-2 shadow-sm">
+                    <img src={p.url} alt={`รูป ${i+1}`} className="w-full h-64 object-contain bg-white mb-3 rounded" />
                     <p className="text-sm text-center text-slate-800 font-medium px-2 pb-2">{p.caption || `รูปที่ ${i+1}`}</p>
                   </div>
                 </div>
