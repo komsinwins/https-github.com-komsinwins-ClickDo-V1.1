@@ -10,6 +10,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Projects } from './pages/Projects';
 import { MasterData } from './pages/MasterData';
 import { ProjectDetails } from './pages/ProjectDetails';
+import { ProjectSummary } from './pages/ProjectSummary';
 import { AlertCircle } from 'lucide-react';
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
     if (currentRoute === 'dashboard') return <Dashboard navigate={navigate} />;
     if (currentRoute === 'projects') return <Projects navigate={navigate} />;
     if (currentRoute === 'master') return <MasterData />;
+    if (currentRoute === 'project-summary') return <ProjectSummary navigate={navigate} />;
     
     if (currentRoute.startsWith('projects/')) {
       const parts = currentRoute.split('/');

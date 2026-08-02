@@ -87,17 +87,23 @@ export function Dashboard({ navigate }: DashboardProps = {}) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg border border-slate-200">
           <h3 className="text-sm font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-2">{lang === 'th' ? 'สัดส่วนโครงการตามบริษัท' : 'Projects by Company'}</h3>
-          <div className="h-[300px]">
-            {projectsByCustomer.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={projectsByCustomer} margin={{ bottom: 80, right: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11}} angle={-45} textAnchor="end" interval={0} height={80} />
-                  <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
-                  <RechartsTooltip cursor={{fill: '#f1f5f9'}} />
-                  <Bar dataKey="count" fill="#8884d8" radius={[4, 4, 0, 0]} barSize={30} />
-                </BarChart>
-              </ResponsiveContainer>
+          <div className="h-[300px] overflow-y-auto pr-2">
+            {projectsByCustomer.filter(item => item.count > 1).slice(0, 10).length > 0 ? (
+              <div className="space-y-3">
+                {projectsByCustomer.filter(item => item.count > 1).slice(0, 10).map((item, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-md border border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {index + 1}
+                      </div>
+                      <span className="text-sm font-medium text-slate-700 line-clamp-1">{item.name}</span>
+                    </div>
+                    <div className="text-sm font-bold text-slate-800 bg-white px-3 py-1 rounded border border-slate-200 shadow-sm whitespace-nowrap ml-2">
+                      {item.count} {lang === 'th' ? 'โครงการ' : 'Projects'}
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400">{lang === 'th' ? 'ไม่มีข้อมูล' : 'No data available'}</div>
             )}

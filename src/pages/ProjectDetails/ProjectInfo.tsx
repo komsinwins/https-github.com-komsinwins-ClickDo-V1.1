@@ -29,6 +29,9 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
     ? Math.round(projectScopes.reduce((sum, s) => sum + s.progress, 0) / projectScopes.length)
     : 0;
 
+  const selectedOwner = data.owners.find(o => o.id === project.ownerId);
+  const installationLocations = selectedOwner?.installationLocations || [];
+
   return (
     <div className="max-w-4xl space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -82,12 +85,19 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
 
         <div className="space-y-1 md:col-span-12">
           <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'สถานที่ติดตั้ง' : 'Installation Location'}</label>
-          <textarea
+          <input
+            type="text"
+            list="location-options"
             value={project.location}
             onChange={e => handleChange('location', e.target.value)}
-            rows={2}
-            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent resize-none"
+            placeholder={lang === 'th' ? 'เลือกหรือพิมพ์สถานที่ติดตั้ง...' : 'Select or type installation location...'}
+            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF] focus:border-transparent"
           />
+          <datalist id="location-options">
+            {installationLocations.map((loc, idx) => (
+               <option key={idx} value={loc} />
+            ))}
+          </datalist>
         </div>
 
         <div className="space-y-1 md:col-span-12">

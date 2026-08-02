@@ -17,6 +17,35 @@ export function MasterData() {
     note: ''
   });
 
+  const [newLocation, setNewLocation] = useState<Record<string, string>>({});
+
+  const handleAddLocation = (ownerId: string) => {
+    const loc = newLocation[ownerId]?.trim();
+    if (!loc) return;
+    const owners = data.owners.map(o => {
+      if (o.id === ownerId) {
+        return { ...o, installationLocations: [...(o.installationLocations || []), loc] };
+      }
+      return o;
+    });
+    updateData({ owners });
+    setNewLocation({ ...newLocation, [ownerId]: '' });
+  };
+
+  const handleRemoveLocation = (ownerId: string, index: number) => {
+    if (window.confirm(lang === 'th' ? 'คุณแน่ใจหรือไม่ว่าต้องการลบสถานที่นี้?' : 'Are you sure you want to delete this location?')) {
+      const owners = data.owners.map(o => {
+        if (o.id === ownerId) {
+           const newLocs = [...(o.installationLocations || [])];
+           newLocs.splice(index, 1);
+           return { ...o, installationLocations: newLocs };
+        }
+        return o;
+      });
+      updateData({ owners });
+    }
+  };
+
   const handleAdd = () => {
     if (activeTab === 'contractorMaster') {
       if (!contractorForm.firstName.trim() || !contractorForm.lastName.trim()) return;
@@ -172,36 +201,73 @@ export function MasterData() {
               </div>
             ) : (
               data[activeTab].map((item: any) => (
-                <div key={item.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
-                  {activeTab === 'contractorMaster' ? (
-                    <div className="flex flex-col">
-                      <span className="font-medium text-slate-800">
-                        {item.firstName} {item.lastName}
-                      </span>
-                      <div className="text-sm text-slate-500 flex gap-4 mt-1">
-                        {item.company && <span>{lang === 'th' ? 'บริษัท:' : 'Company:'} {item.company}</span>}
-                        {item.phone && <span>{lang === 'th' ? 'โทร:' : 'Tel:'} {item.phone}</span>}
+                <div key={item.id} className="flex flex-col p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className="flex justify-between items-center">
+                    {activeTab === 'contractorMaster' ? (
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-800">
+                          {item.firstName} {item.lastName}
+                        </span>
+                        <div className="text-sm text-slate-500 flex gap-4 mt-1">
+                          {item.company && <span>{lang === 'th' ? 'บริษัท:' : 'Company:'} {item.company}</span>}
+                          {item.phone && <span>{lang === 'th' ? 'โทร:' : 'Tel:'} {item.phone}</span>}
+                        </div>
+                        {item.note && <div className="text-xs text-slate-400 mt-1">{item.note}</div>}
                       </div>
-                      {item.note && <div className="text-xs text-slate-400 mt-1">{item.note}</div>}
-                    </div>
-                  ) : activeTab === 'projectStatuses' ? (
-                    <div className="flex items-center gap-3">
-                      <div 
-                        className="w-4 h-4 rounded-full border border-slate-200" 
-                        style={{ backgroundColor: item.color || '#0061FF' }}
-                      />
+                    ) : activeTab === 'projectStatuses' ? (
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-4 h-4 rounded-full border border-slate-200" 
+                          style={{ backgroundColor: item.color || '#0061FF' }}
+                        />
+                        <span className="font-medium text-slate-700">{item.name}</span>
+                      </div>
+                    ) : (
                       <span className="font-medium text-slate-700">{item.name}</span>
+                    )}
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title={lang === 'th' ? 'ลบ' : 'Delete'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {activeTab === 'owners' && (
+                    <div className="mt-4 pt-4 border-t border-slate-200 pl-2">
+                      <p className="text-sm font-semibold text-slate-600 mb-3">{lang === 'th' ? 'สถานที่ติดตั้งที่ลงทะเบียน' : 'Registered Installation Locations'}</p>
+                      <div className="space-y-2 mb-3">
+                        {(item.installationLocations || []).map((loc: string, idx: number) => (
+                          <div key={idx} className="flex justify-between items-center p-2 bg-white rounded border border-slate-200 text-sm">
+                            <span className="text-slate-700">{loc}</span>
+                            <button 
+                              onClick={() => handleRemoveLocation(item.id, idx)}
+                              className="text-red-500 hover:text-red-700"
+                              title={lang === 'th' ? 'ลบสถานที่' : 'Delete Location'}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newLocation[item.id] || ''}
+                          onChange={(e) => setNewLocation({ ...newLocation, [item.id]: e.target.value })}
+                          placeholder={lang === 'th' ? 'เพิ่มสถานที่ติดตั้งใหม่...' : 'Add new installation location...'}
+                          className="flex-1 px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddLocation(item.id)}
+                        />
+                        <button
+                          onClick={() => handleAddLocation(item.id)}
+                          className="px-3 py-1.5 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded text-sm font-medium transition-colors"
+                        >
+                          {lang === 'th' ? 'เพิ่ม' : 'Add'}
+                        </button>
+                      </div>
                     </div>
-                  ) : (
-                    <span className="font-medium text-slate-700">{item.name}</span>
                   )}
-                  <button
-                    onClick={() => handleDelete(item.id)}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    title={lang === 'th' ? 'ลบ' : 'Delete'}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               ))
             )}

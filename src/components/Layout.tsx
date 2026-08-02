@@ -8,7 +8,8 @@ import {
   Menu,
   Globe,
   Download,
-  Upload
+  Upload,
+  BarChart2
 } from 'lucide-react';
 import { useAppStore } from '../store';
 import { differenceInDays, parseISO } from 'date-fns';
@@ -26,6 +27,7 @@ export function Sidebar({ currentRoute, navigate }: SidebarProps) {
     { id: 'dashboard', label: lang === 'th' ? 'แผงควบคุม' : 'Dashboard', icon: LayoutDashboard },
     { id: 'projects', label: lang === 'th' ? 'โครงการ' : 'Projects', icon: FolderKanban },
     { id: 'master', label: lang === 'th' ? 'ข้อมูลหลัก' : 'Master Data', icon: Users },
+    { id: 'project-summary', label: lang === 'th' ? 'สรุปปริมาณโครงการ' : 'Project Summary', icon: BarChart2 },
   ];
 
   return (

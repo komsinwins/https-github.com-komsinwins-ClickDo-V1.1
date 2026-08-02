@@ -6,6 +6,7 @@ export interface Customer {
 export interface Owner {
   id: string;
   name: string;
+  installationLocations?: string[];
 }
 
 export interface Salesperson {

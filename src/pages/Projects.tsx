@@ -11,7 +11,7 @@ interface ProjectsProps {
 export function Projects({ navigate }: ProjectsProps) {
   const { data, updateData } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'board'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'board'>('list');
   const [sortBy, setSortBy] = useState<'active-first' | 'name-asc' | 'date-desc' | 'date-asc'>('active-first');
   const lang = data.language || 'th';
 
