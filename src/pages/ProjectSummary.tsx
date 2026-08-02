@@ -119,16 +119,24 @@ export function ProjectSummary({ navigate }: ProjectSummaryProps) {
                     {isExpanded && (
                       <div className="p-3 border-t border-slate-200 bg-white">
                         <ul className="space-y-2">
-                          {item.projects.map(proj => (
-                            <li 
-                              key={proj.id}
-                              onClick={() => navigate ? navigate(`projects/${proj.id}/info`) : undefined}
-                              className="text-sm text-blue-600 hover:text-blue-800 cursor-pointer flex items-start gap-2 group"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0 group-hover:bg-blue-600"></span>
-                              <span className="line-clamp-2">{proj.name}</span>
-                            </li>
-                          ))}
+                          {item.projects.map(proj => {
+                            const ownerName = data.owners.find(o => o.id === proj.ownerId)?.name || (lang === 'th' ? 'ไม่ระบุเจ้าของโครงการ' : 'No owner specified');
+                            return (
+                              <li 
+                                key={proj.id}
+                                onClick={() => navigate ? navigate(`projects/${proj.id}/info`) : undefined}
+                                className="text-sm text-blue-600 hover:text-blue-800 cursor-pointer flex flex-col group py-1"
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0 group-hover:bg-blue-600"></span>
+                                  <span className="line-clamp-2">{proj.name}</span>
+                                </div>
+                                <div className="pl-3.5 text-xs text-slate-500 mt-0.5">
+                                  {ownerName}
+                                </div>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     )}
