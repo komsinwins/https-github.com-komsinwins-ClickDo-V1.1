@@ -3,8 +3,6 @@ import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Download, Image as ImageIcon, X, Printer, Loader2 } from 'lucide-react';
 import { Report } from '../../types';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 
 const PrintableReport = ({ report, project, id, lang }: { report: Report, project: any, id: string, lang: string }) => (
   <div id={id} className="bg-white text-black mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '20mm' }}>
@@ -152,39 +150,7 @@ export function Reports({ projectId }: { projectId: string }) {
   };
 
   const exportPDF = async (report: Report) => {
-    setIsExportingPDF(report.id);
-    
-    setTimeout(async () => {
-      const element = document.getElementById(`pdf-export-${report.id}`);
-      if (element) {
-        try {
-          const canvas = await html2canvas(element, { scale: 2, useCORS: true });
-          const imgData = canvas.toDataURL('image/png');
-          
-          const pdf = new jsPDF('p', 'mm', 'a4');
-          const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = pdf.internal.pageSize.getHeight();
-          const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-          let heightLeft = imgHeight;
-          let position = 0;
-
-          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-          heightLeft -= pdfHeight;
-
-          while (heightLeft >= 0) {
-            position = heightLeft - imgHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pdfHeight;
-          }
-
-          pdf.save(`${report.type}_report_${report.date}.pdf`);
-        } catch (e) {
-          console.error("PDF Export failed", e);
-        }
-      }
-      setIsExportingPDF(null);
-    }, 500);
+    window.print();
   };
 
   if (isCreating) {
@@ -304,18 +270,7 @@ export function Reports({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {isExportingPDF && (
-        <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
-          <PrintableReport 
-            report={reports.find(r => r.id === isExportingPDF)!} 
-            project={project} 
-            id={`pdf-export-${isExportingPDF}`} 
-            lang={lang}
-          />
-        </div>
-      )}
-
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center print:hidden">
         <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'รายงานโครงการ' : 'Project Reports'}</h3>
         <button
           onClick={() => setIsCreating(true)}
@@ -346,8 +301,8 @@ export function Reports({ projectId }: { projectId: string }) {
                 <button onClick={() => handlePrint(report)} className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors" title={lang === 'th' ? 'พิมพ์ขนาด A4' : "Print to A4"}>
                   <Printer className="w-4 h-4" /> {lang === 'th' ? 'พิมพ์' : 'Print'}
                 </button>
-                <button onClick={() => exportPDF(report)} disabled={isExportingPDF === report.id} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors" title={lang === 'th' ? 'ส่งออก PDF' : "Export as PDF"}>
-                  {isExportingPDF === report.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} PDF
+                <button onClick={() => handlePrint(report)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors" title={lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : "Print / Export PDF"}>
+                  <Download className="w-4 h-4" /> PDF
                 </button>
                 <button onClick={() => deleteReport(report.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-2" title={lang === 'th' ? 'ลบรายงาน' : "Delete Report"}>
                   <Trash2 className="w-4 h-4" />

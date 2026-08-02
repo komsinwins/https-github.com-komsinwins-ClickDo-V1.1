@@ -3,7 +3,6 @@ import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
 import { Download, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { Report } from '../../types';
-import { jsPDF } from 'jspdf';
 import { format, parseISO } from 'date-fns';
 
 export function Closeout({ projectId }: { projectId: string }) {
@@ -71,75 +70,28 @@ export function Closeout({ projectId }: { projectId: string }) {
     }
   };
 
-  const [isExporting, setIsExporting] = useState(false);
-  const printRef = useRef<HTMLDivElement>(null);
-
-  const exportPDF = async () => {
-    if (!printRef.current) return;
-    setIsExporting(true);
-    
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      
-      // Briefly make the print area visible but off-screen to ensure proper rendering
-      const printElement = printRef.current;
-      printElement.style.display = 'block';
-      
-      const canvas = await html2canvas(printElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: 794 // A4 width at 96 DPI
-      });
-      
-      printElement.style.display = 'none';
-
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = pdfWidth / imgWidth;
-      const totalPdfHeight = imgHeight * ratio;
-      
-      let heightLeft = totalPdfHeight;
-      let position = 0;
-      
-      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, totalPdfHeight);
-      heightLeft -= pdfHeight;
-      
-      while (heightLeft > 0) {
-        position = heightLeft - totalPdfHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, totalPdfHeight);
-        heightLeft -= pdfHeight;
-      }
-      
-      pdf.save(`Summary_Report_${project?.name || 'Project'}.pdf`);
-    } catch (err) {
-      console.error(err);
-      alert(lang === 'th' ? 'เกิดข้อผิดพลาดในการสร้าง PDF' : 'Error generating PDF');
-    } finally {
-      setIsExporting(false);
-    }
+  const exportPDF = () => {
+    // We use the browser's native print functionality which perfectly handles Thai fonts, colors, and pagination.
+    // The Layout and components have been updated with `print:hidden` and `print:block` classes to format it correctly.
+    window.print();
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-xl font-bold text-slate-800">{lang === 'th' ? 'รายงานสรุปโครงการ' : 'Project Summary Report'}</h3>
-          <p className="text-slate-500">{lang === 'th' ? 'รายงานและสถานะสุดท้าย' : 'Final report and status.'}</p>
+    <div>
+      {/* Main UI - hidden when printing */}
+      <div className="space-y-8 print:hidden">
+        <div className="flex justify-between items-center">
+          <div>
+            <h3 className="text-xl font-bold text-slate-800">{lang === 'th' ? 'รายงานสรุปโครงการ' : 'Project Summary Report'}</h3>
+            <p className="text-slate-500">{lang === 'th' ? 'รายงานและสถานะสุดท้าย' : 'Final report and status.'}</p>
+          </div>
+          <div className="flex gap-4">
+            <button onClick={handleSave} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium">{lang === 'th' ? 'บันทึกร่าง' : 'Save Draft'}</button>
+            <button onClick={exportPDF} className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 font-medium">
+              <Download className="w-4 h-4" /> {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print / Export PDF'}
+            </button>
+          </div>
         </div>
-        <div className="flex gap-4">
-          <button onClick={handleSave} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium">{lang === 'th' ? 'บันทึกร่าง' : 'Save Draft'}</button>
-          <button disabled={isExporting} onClick={exportPDF} className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2 font-medium">
-            <Download className={`w-4 h-4 ${isExporting ? 'animate-bounce' : ''}`} /> {isExporting ? (lang === 'th' ? 'กำลังส่งออก...' : 'Exporting...') : (lang === 'th' ? 'ส่งออก PDF' : 'Export PDF')}
-          </button>
-        </div>
-      </div>
 
       <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
         <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-200">{lang === 'th' ? '1. รายละเอียดโครงการ' : '1. Project Details'}</h4>
@@ -281,22 +233,10 @@ export function Closeout({ projectId }: { projectId: string }) {
           ))}
         </div>
       </div>
+      </div>
 
       {/* Hidden PDF Export Template */}
-      <div 
-        ref={printRef} 
-        style={{ 
-          display: 'none', 
-          position: 'absolute', 
-          top: '-9999px', 
-          left: 0, 
-          width: '210mm', 
-          backgroundColor: '#fff',
-          color: '#000',
-          padding: '20mm',
-          fontFamily: 'sans-serif'
-        }}
-      >
+      <div className="hidden print:block w-full bg-white text-black font-sans print:p-8">
         <h1 className="text-2xl font-bold text-center mb-8">{lang === 'th' ? 'รายงานสรุปโครงการ' : 'Project Summary Report'}</h1>
         
         {/* Section 1 */}

@@ -2,8 +2,6 @@ import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Download } from 'lucide-react';
 import { Worker, Vehicle } from '../../types';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 
 export function WorkersVehicles({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
@@ -39,36 +37,19 @@ export function WorkersVehicles({ projectId }: { projectId: string }) {
     updateData({ vehicles: data.vehicles.filter(v => v.id !== id) });
   };
 
-  const exportPDF = async () => {
-    const element = document.getElementById('export-container');
-    if (!element) return;
-    
-    // Temporarily hide buttons for export
-    const buttons = element.querySelectorAll('button');
-    buttons.forEach(b => b.style.display = 'none');
-    
-    const canvas = await html2canvas(element, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    
-    buttons.forEach(b => b.style.display = '');
-
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`Workers_Vehicles_${project?.name || 'Project'}.pdf`);
+  const exportPDF = () => {
+    window.print();
   };
 
   return (
     <div className="space-y-8 relative">
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end mb-4 print:hidden">
         <button
           onClick={exportPDF}
           className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 flex items-center gap-2 font-medium transition-colors"
         >
           <Download className="w-4 h-4" />
-          {lang === 'th' ? 'ส่งออก PDF' : 'Export PDF'}
+          {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print / Export PDF'}
         </button>
       </div>
 
@@ -82,7 +63,7 @@ export function WorkersVehicles({ projectId }: { projectId: string }) {
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
             <h3 className="font-bold text-slate-800">{lang === 'th' ? 'รายชื่อผู้ปฎิบัติงาน' : 'Workers'}</h3>
-            <button onClick={addWorker} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg">
+            <button onClick={addWorker} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg print:hidden">
               <Plus className="w-5 h-5" />
             </button>
           </div>
@@ -106,7 +87,7 @@ export function WorkersVehicles({ projectId }: { projectId: string }) {
                   <td className="p-2"><input type="text" value={w.role || ''} onChange={e => updateWorker(w.id, 'role', e.target.value)} className="w-full p-2 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded" placeholder={lang === 'th' ? 'หน้าที่' : 'Role'}/></td>
                   <td className="p-2"><input type="text" value={w.phone || ''} onChange={e => updateWorker(w.id, 'phone', e.target.value)} className="w-full p-2 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded" placeholder={lang === 'th' ? 'เบอร์โทรศัพท์' : 'Phone'}/></td>
                   <td className="p-2 text-right">
-                    <button onClick={() => deleteWorker(w.id)} className="p-2 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => deleteWorker(w.id)} className="p-2 text-red-500 hover:bg-red-50 rounded print:hidden"><Trash2 className="w-4 h-4" /></button>
                   </td>
                 </tr>
               ))}
@@ -118,7 +99,7 @@ export function WorkersVehicles({ projectId }: { projectId: string }) {
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
             <h3 className="font-bold text-slate-800">{lang === 'th' ? 'ยานพาหนะ' : 'Vehicles'}</h3>
-            <button onClick={addVehicle} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg">
+            <button onClick={addVehicle} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg print:hidden">
               <Plus className="w-5 h-5" />
             </button>
           </div>
@@ -144,7 +125,7 @@ export function WorkersVehicles({ projectId }: { projectId: string }) {
                   <td className="p-2"><input type="text" value={v.model} onChange={e => updateVehicle(v.id, 'model', e.target.value)} className="w-full p-2 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded" placeholder={lang === 'th' ? 'ไฮลักซ์' : 'Hilux'}/></td>
                   <td className="p-2"><input type="text" value={v.color} onChange={e => updateVehicle(v.id, 'color', e.target.value)} className="w-full p-2 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 rounded" placeholder={lang === 'th' ? 'ขาว' : 'White'}/></td>
                   <td className="p-2 text-right">
-                    <button onClick={() => deleteVehicle(v.id)} className="p-2 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => deleteVehicle(v.id)} className="p-2 text-red-500 hover:bg-red-50 rounded print:hidden"><Trash2 className="w-4 h-4" /></button>
                   </td>
                 </tr>
               ))}

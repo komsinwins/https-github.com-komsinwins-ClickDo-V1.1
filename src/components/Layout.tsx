@@ -174,11 +174,15 @@ export function Header() {
 
 export function Layout({ children, currentRoute, navigate }: { children: ReactNode; currentRoute: string; navigate: (r: string) => void }) {
   return (
-    <div className="flex h-screen bg-slate-50 font-sans">
-      <Sidebar currentRoute={currentRoute} navigate={navigate} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-y-auto p-4">
+    <div className="flex h-screen bg-slate-50 font-sans print:h-auto print:bg-white print:block">
+      <div className="print:hidden shrink-0">
+        <Sidebar currentRoute={currentRoute} navigate={navigate} />
+      </div>
+      <div className="flex-1 flex flex-col overflow-hidden print:overflow-visible print:block">
+        <div className="print:hidden shrink-0">
+          <Header />
+        </div>
+        <main className="flex-1 overflow-y-auto p-4 print:p-0 print:overflow-visible print:block">
           {children}
         </main>
       </div>

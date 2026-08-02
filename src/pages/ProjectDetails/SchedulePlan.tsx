@@ -1,8 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
 import { differenceInDays, parseISO, isValid, addDays, format, min, max } from 'date-fns';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Download, Loader2, GripVertical, Plus, Trash2, BarChart, Table as TableIcon } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -125,49 +123,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     setDraggedId(null);
   };
 
-  const exportPDF = async () => {
-    if (!reportRef.current) return;
-    setIsExporting(true);
-    
-    try {
-      const element = reportRef.current;
-      const originalWidth = element.style.width;
-      
-      const pxPerMm = 3.7795275591;
-      const widthMm = paperSize === 'a4' ? (orientation === 'p' ? 210 : 297) : (orientation === 'p' ? 297 : 420);
-      element.style.width = `${widthMm * pxPerMm}px`;
-      
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true });
-      const imgData = canvas.toDataURL('image/png');
-      
-      const pdf = new jsPDF(orientation, 'mm', paperSize);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgProps = pdf.getImageProperties(imgData);
-      const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-      
-      pdf.save(`Schedule_${projectId}_${paperSize}.pdf`);
-      
-      element.style.width = originalWidth;
-    } catch (e) {
-      console.error("PDF Export failed", e);
-    }
-    
-    setIsExporting(false);
+  const exportPDF = () => {
+    window.print();
   };
 
   return (
@@ -235,11 +192,10 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
           </div>
           <button
             onClick={exportPDF}
-            disabled={isExporting}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700 flex items-center gap-2 transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700 flex items-center gap-2 transition-colors disabled:opacity-50 print:hidden"
           >
-            {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            {lang === 'th' ? 'ส่งออก PDF' : 'Export PDF'}
+            <Download className="w-3.5 h-3.5" />
+            {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print / Export PDF'}
           </button>
         </div>
       </div>
