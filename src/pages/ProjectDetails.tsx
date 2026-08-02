@@ -41,8 +41,8 @@ export function ProjectDetails({ projectId, tab, navigate }: Props) {
   ];
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex items-center gap-3 border-b border-slate-200 pb-3 mb-4 shrink-0">
+    <div className="w-full h-full flex flex-col print:h-auto print:block">
+      <div className="flex items-center gap-3 border-b border-slate-200 pb-3 mb-4 shrink-0 print:hidden">
         <button 
           onClick={() => navigate('projects')}
           className="p-1 hover:bg-slate-200 rounded transition-colors"
@@ -54,8 +54,8 @@ export function ProjectDetails({ projectId, tab, navigate }: Props) {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-slate-200 flex flex-col flex-1 overflow-hidden">
-        <div className="flex border-b border-slate-200 overflow-x-auto no-scrollbar bg-slate-50 shrink-0">
+      <div className="bg-white rounded-lg border border-slate-200 flex flex-col flex-1 overflow-hidden print:border-none print:shadow-none print:rounded-none print:overflow-visible">
+        <div className="flex border-b border-slate-200 overflow-x-auto no-scrollbar bg-slate-50 shrink-0 print:hidden">
           {tabs.map(t => (
             <button
               key={t.id}
@@ -71,7 +71,7 @@ export function ProjectDetails({ projectId, tab, navigate }: Props) {
           ))}
         </div>
         
-        <div className="p-4 flex-1 overflow-y-auto">
+        <div className="p-4 flex-1 overflow-y-auto print:p-0 print:overflow-visible">
           {tab === 'info' && <ProjectInfo projectId={projectId} />}
           {tab === 'scope' && <ScopeOfWork projectId={projectId} />}
           {tab === 'timeline' && <Timeline projectId={projectId} />}

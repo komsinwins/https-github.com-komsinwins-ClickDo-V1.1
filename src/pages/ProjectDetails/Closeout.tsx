@@ -241,16 +241,10 @@ export function Closeout({ projectId }: { projectId: string }) {
         {/* Document Header */}
         <div className="flex justify-between items-start border-b-4 border-slate-800 pb-6 mb-8">
           <div className="flex items-center gap-4">
-            {/* Placeholder for Logo */}
-            <div className="w-20 h-20 bg-slate-100 border-2 border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-xs">LOGO</div>
             <div>
               <h1 className="text-3xl font-extrabold uppercase tracking-tight text-slate-900">{lang === 'th' ? 'รายงานสรุปโครงการ' : 'Project Summary Report'}</h1>
               <p className="text-slate-600 mt-1 font-medium">{project?.name}</p>
             </div>
-          </div>
-          <div className="text-right text-sm text-slate-600 space-y-1">
-            <p><span className="font-semibold">{lang === 'th' ? 'วันที่พิมพ์:' : 'Print Date:'}</span> {formatDate(new Date().toISOString())}</p>
-            <p><span className="font-semibold">{lang === 'th' ? 'รหัสโครงการ:' : 'Project ID:'}</span> {project?.id?.slice(0, 8).toUpperCase()}</p>
           </div>
         </div>
         
@@ -415,15 +409,10 @@ export function Closeout({ projectId }: { projectId: string }) {
           <div className="break-before-page pt-8">
             <div className="flex justify-between items-start border-b-4 border-slate-800 pb-6 mb-8">
               <div className="flex items-center gap-4">
-                <div className="w-20 h-20 bg-slate-100 border-2 border-slate-300 rounded flex items-center justify-center text-slate-400 font-bold text-xs">LOGO</div>
                 <div>
                   <h1 className="text-3xl font-extrabold uppercase tracking-tight text-slate-900">{lang === 'th' ? 'ภาคผนวก' : 'Appendix'}</h1>
                   <p className="text-slate-600 mt-1 font-medium">{lang === 'th' ? 'รูปภาพประกอบโครงการ' : 'Attached Photos'}</p>
                 </div>
-              </div>
-              <div className="text-right text-sm text-slate-600 space-y-1">
-                <p><span className="font-semibold">{lang === 'th' ? 'วันที่พิมพ์:' : 'Print Date:'}</span> {formatDate(new Date().toISOString())}</p>
-                <p><span className="font-semibold">{lang === 'th' ? 'รหัสโครงการ:' : 'Project ID:'}</span> {project?.id?.slice(0, 8).toUpperCase()}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-8">
