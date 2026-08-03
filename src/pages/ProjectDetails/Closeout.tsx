@@ -5,6 +5,7 @@ import { Download, Image as ImageIcon, Trash2, Eraser } from 'lucide-react';
 import { Report } from '../../types';
 import { format, parseISO } from 'date-fns';
 import SignatureCanvas from 'react-signature-canvas';
+import { SaveButton } from '../../components/SaveButton';
 
 export function Closeout({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
@@ -24,10 +25,13 @@ export function Closeout({ projectId }: { projectId: string }) {
   const [solutions, setSolutions] = useState(closeoutReport?.solutions || ''); // reusing solutions as "Operations Summary"
   const [remarks, setRemarks] = useState(closeoutReport?.remarks || '');
   const [photos, setPhotos] = useState<{url: string, caption: string}[]>(closeoutReport?.photos || []);
-  const [signatureUrl, setSignatureUrl] = useState<string | undefined>(closeoutReport?.signatureUrl);
+  
+  const [clientSigUrl, setClientSigUrl] = useState<string | undefined>(closeoutReport?.clientSignatureUrl || closeoutReport?.signatureUrl);
+  const [officerSigUrl, setOfficerSigUrl] = useState<string | undefined>(closeoutReport?.officerSignatureUrl);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const signaturePad = useRef<SignatureCanvas>(null);
+  const clientSigPad = useRef<SignatureCanvas>(null);
+  const officerSigPad = useRef<SignatureCanvas>(null);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -43,10 +47,25 @@ export function Closeout({ projectId }: { projectId: string }) {
   };
 
   const handleSave = () => {
-    let finalSignatureUrl = signatureUrl;
-    if (signaturePad.current && !signaturePad.current.isEmpty()) {
-      finalSignatureUrl = signaturePad.current.getTrimmedCanvas().toDataURL('image/png');
-      setSignatureUrl(finalSignatureUrl); // update state as well
+    let finalClientSig = clientSigUrl;
+    let finalOfficerSig = officerSigUrl;
+
+    if (clientSigPad.current && !clientSigPad.current.isEmpty()) {
+      try {
+        finalClientSig = clientSigPad.current.getCanvas().toDataURL('image/png');
+        setClientSigUrl(finalClientSig);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    if (officerSigPad.current && !officerSigPad.current.isEmpty()) {
+      try {
+        finalOfficerSig = officerSigPad.current.getCanvas().toDataURL('image/png');
+        setOfficerSigUrl(finalOfficerSig);
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     const reportData: Report = {
@@ -60,7 +79,9 @@ export function Closeout({ projectId }: { projectId: string }) {
       nextSteps: '',
       remarks,
       photos,
-      signatureUrl: finalSignatureUrl
+      signatureUrl: finalOfficerSig || finalClientSig,
+      clientSignatureUrl: finalClientSig,
+      officerSignatureUrl: finalOfficerSig
     };
     
     if (closeoutReport) {
@@ -68,7 +89,6 @@ export function Closeout({ projectId }: { projectId: string }) {
     } else {
       updateData({ reports: [...data.reports, reportData] });
     }
-    alert(lang === 'th' ? 'บันทึกรายงานสรุปโครงการแล้ว' : 'Closeout report saved.');
   };
 
   const formatDate = (dateStr?: string) => {
@@ -81,8 +101,6 @@ export function Closeout({ projectId }: { projectId: string }) {
   };
 
   const exportPDF = () => {
-    // We use the browser's native print functionality which perfectly handles Thai fonts, colors, and pagination.
-    // The Layout and components have been updated with `print:hidden` and `print:block` classes to format it correctly.
     window.print();
   };
 
@@ -90,16 +108,16 @@ export function Closeout({ projectId }: { projectId: string }) {
     <div>
       {/* Main UI - hidden when printing */}
       <div className="space-y-8 print:hidden">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center border-b border-slate-200 pb-3">
           <div>
             <h3 className="text-xl font-bold text-slate-800">{lang === 'th' ? 'รายงานสรุปโครงการ' : 'Project Summary Report'}</h3>
-            <p className="text-slate-500">{lang === 'th' ? 'รายงานและสถานะสุดท้าย' : 'Final report and status.'}</p>
+            <p className="text-slate-500 text-xs sm:text-sm">{lang === 'th' ? 'รายงานและสถานะสุดท้าย' : 'Final report and status.'}</p>
           </div>
-          <div className="flex gap-4">
-            <button onClick={handleSave} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 font-medium">{lang === 'th' ? 'บันทึกร่าง' : 'Save Draft'}</button>
-            <button onClick={exportPDF} className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 font-medium">
+          <div className="flex items-center gap-3">
+            <button onClick={exportPDF} className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 font-medium text-xs sm:text-sm">
               <Download className="w-4 h-4" /> {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print / Export PDF'}
             </button>
+            <SaveButton onSave={handleSave} successMessage={lang === 'th' ? 'บันทึกรายงานสรุปโครงการเรียบร้อยแล้ว' : 'Closeout report saved'} />
           </div>
         </div>
 
@@ -242,40 +260,93 @@ export function Closeout({ projectId }: { projectId: string }) {
         </div>
       </div>
       
-      <div className="space-y-4 pt-4 border-t border-slate-200">
-        <div className="flex justify-between items-center mb-2">
-          <h4 className="font-medium text-slate-700">{lang === 'th' ? '10. ลายมือชื่อ' : '10. Signature'}</h4>
-          <button 
-            onClick={() => {
-              signaturePad.current?.clear();
-              setSignatureUrl(undefined);
-            }} 
-            className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded hover:bg-slate-200 flex items-center gap-1.5 text-xs font-medium"
-          >
-            <Eraser className="w-3.5 h-3.5" />
-            {lang === 'th' ? 'ล้างลายมือชื่อ' : 'Clear Signature'}
-          </button>
-        </div>
-        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white max-w-md">
-          {signatureUrl && !signaturePad.current?.isEmpty() && false /* logic to hide if we want to show image */ }
-          <SignatureCanvas 
-            ref={signaturePad} 
-            canvasProps={{ className: 'w-full h-40' }}
-            onEnd={() => {
-              if (signaturePad.current) {
-                setSignatureUrl(signaturePad.current.getTrimmedCanvas().toDataURL('image/png'));
-              }
-            }}
-          />
-        </div>
-        {signatureUrl && (
-          <div className="text-xs text-emerald-600 font-medium">
-            {lang === 'th' ? 'บันทึกลายมือชื่อแล้ว (คุณสามารถลบและเซ็นใหม่ได้)' : 'Signature saved (You can clear and re-sign)'}
+      {/* Signature Section - Dual Column (Left: Customer, Right: Officer) */}
+      <div className="space-y-4 pt-6 border-t border-slate-200">
+        <h4 className="font-bold text-slate-800 text-base">{lang === 'th' ? '10. ลายมือชื่อยืนยัน' : '10. Signatures'}</h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left Column: Customer Signature */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-sm text-slate-800">{lang === 'th' ? 'ช่องด้านซ้าย: ลายมือชื่อลูกค้า / ผู้ว่าจ้าง' : 'Left Box: Customer Signature'}</span>
+              <button 
+                onClick={() => {
+                  clientSigPad.current?.clear();
+                  setClientSigUrl(undefined);
+                }} 
+                className="px-2.5 py-1 bg-white border border-slate-200 text-slate-600 rounded hover:bg-slate-100 flex items-center gap-1 text-xs font-medium"
+              >
+                <Eraser className="w-3 h-3" />
+                {lang === 'th' ? 'ล้าง' : 'Clear'}
+              </button>
+            </div>
+            <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-inner">
+              <SignatureCanvas 
+                ref={clientSigPad} 
+                canvasProps={{ className: 'w-full h-36 bg-white' }}
+                onEnd={() => {
+                  if (clientSigPad.current) {
+                    try {
+                      setClientSigUrl(clientSigPad.current.getCanvas().toDataURL('image/png'));
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  }
+                }}
+              />
+            </div>
+            {clientSigUrl ? (
+              <div className="text-xs text-emerald-600 font-medium">
+                ✓ {lang === 'th' ? 'บันทึกลายมือชื่อลูกค้าแล้ว' : 'Customer signature saved'}
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-400 italic">{lang === 'th' ? 'ใช้เมาส์ หรือนิ้วลงลายมือชื่อในช่องด้านบน' : 'Sign above using mouse or touch'}</p>
+            )}
           </div>
-        )}
+
+          {/* Right Column: Officer Signature */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-sm text-slate-800">{lang === 'th' ? 'ช่องด้านขวา: ลายมือชื่อเจ้าหน้าที่ / ผู้รายงาน' : 'Right Box: Officer Signature'}</span>
+              <button 
+                onClick={() => {
+                  officerSigPad.current?.clear();
+                  setOfficerSigUrl(undefined);
+                }} 
+                className="px-2.5 py-1 bg-white border border-slate-200 text-slate-600 rounded hover:bg-slate-100 flex items-center gap-1 text-xs font-medium"
+              >
+                <Eraser className="w-3 h-3" />
+                {lang === 'th' ? 'ล้าง' : 'Clear'}
+              </button>
+            </div>
+            <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-inner">
+              <SignatureCanvas 
+                ref={officerSigPad} 
+                canvasProps={{ className: 'w-full h-36 bg-white' }}
+                onEnd={() => {
+                  if (officerSigPad.current) {
+                    try {
+                      setOfficerSigUrl(officerSigPad.current.getCanvas().toDataURL('image/png'));
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  }
+                }}
+              />
+            </div>
+            {officerSigUrl ? (
+              <div className="text-xs text-emerald-600 font-medium">
+                ✓ {lang === 'th' ? 'บันทึกลายมือชื่อเจ้าหน้าที่แล้ว' : 'Officer signature saved'}
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-400 italic">{lang === 'th' ? 'ใช้เมาส์ หรือนิ้วลงลายมือชื่อในช่องด้านบน' : 'Sign above using mouse or touch'}</p>
+            )}
+          </div>
+        </div>
       </div>
 
       </div>
+
       {/* Hidden PDF Export Template */}
       <div className="hidden print:block w-full bg-white text-black font-sans">
         
@@ -439,17 +510,38 @@ export function Closeout({ projectId }: { projectId: string }) {
           </div>
         </div>
         
-        {/* Signature */}
-        {signatureUrl && (
-          <div className="mb-8 break-inside-avoid flex justify-end mt-12">
-            <div className="text-center">
-              <div className="border-b border-slate-400 mb-2 px-8 min-w-[200px]">
-                <img src={signatureUrl} alt="Signature" className="h-20 object-contain mx-auto mix-blend-multiply" />
+        {/* PDF Dual Signatures */}
+        <div className="mb-8 break-inside-avoid mt-12 pt-6 border-t-2 border-slate-800">
+          <div className="grid grid-cols-2 gap-12 text-center">
+            {/* Customer Signature Box (Left) */}
+            <div className="flex flex-col items-center">
+              <div className="h-24 w-full flex items-center justify-center border-b border-slate-400 mb-2">
+                {clientSigUrl ? (
+                  <img src={clientSigUrl} alt="Customer Signature" className="h-20 object-contain mix-blend-multiply mx-auto" />
+                ) : (
+                  <span className="text-xs text-slate-300 italic">{lang === 'th' ? '( ยังไม่ได้ลงนาม )' : '( Not Signed )'}</span>
+                )}
               </div>
-              <p className="text-sm font-medium text-slate-800">{lang === 'th' ? 'ลายมือชื่อผู้ปฏิบัติงาน / ผู้รายงาน' : 'Worker / Reporter Signature'}</p>
+              <p className="text-sm font-bold text-slate-900">{lang === 'th' ? 'ลงชื่อ......................................................' : 'Signature......................................................'}</p>
+              <p className="text-xs font-semibold text-slate-700 mt-1">{lang === 'th' ? '( ลายมือชื่อลูกค้า / ผู้ว่าจ้าง )' : '( Customer / Client Signature )'}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">{lang === 'th' ? 'วันที่ ......... / ......... / .........' : 'Date ......... / ......... / .........'}</p>
+            </div>
+
+            {/* Officer Signature Box (Right) */}
+            <div className="flex flex-col items-center">
+              <div className="h-24 w-full flex items-center justify-center border-b border-slate-400 mb-2">
+                {officerSigUrl ? (
+                  <img src={officerSigUrl} alt="Officer Signature" className="h-20 object-contain mix-blend-multiply mx-auto" />
+                ) : (
+                  <span className="text-xs text-slate-300 italic">{lang === 'th' ? '( ยังไม่ได้ลงนาม )' : '( Not Signed )'}</span>
+                )}
+              </div>
+              <p className="text-sm font-bold text-slate-900">{lang === 'th' ? 'ลงชื่อ......................................................' : 'Signature......................................................'}</p>
+              <p className="text-xs font-semibold text-slate-700 mt-1">{lang === 'th' ? '( ลายมือชื่อเจ้าหน้าที่ / ผู้รายงาน )' : '( Officer / Staff Signature )'}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">{lang === 'th' ? 'วันที่ ......... / ......... / .........' : 'Date ......... / ......... / .........'}</p>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Section 8: Photos (Appendix) */}
         {photos.length > 0 && (
@@ -478,4 +570,3 @@ export function Closeout({ projectId }: { projectId: string }) {
     </div>
   );
 }
-

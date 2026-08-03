@@ -2,6 +2,7 @@ import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Download } from 'lucide-react';
 import { Worker, Vehicle } from '../../types';
+import { SaveButton } from '../../components/SaveButton';
 
 export function WorkersVehicles({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
@@ -43,14 +44,21 @@ export function WorkersVehicles({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-8 relative">
-      <div className="flex justify-end mb-4 print:hidden">
-        <button
-          onClick={exportPDF}
-          className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 flex items-center gap-2 font-medium transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print / Export PDF'}
-        </button>
+      <div className="flex justify-between items-center border-b border-slate-200 pb-3 print:hidden">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'ผู้ปฏิบัติงานและยานพาหนะ' : 'Workers & Vehicles'}</h3>
+          <p className="text-xs text-slate-500">{lang === 'th' ? 'บันทึกรายชื่อผู้ปฏิบัติงานและทะเบียนยานพาหนะเข้าพื้นที่' : 'Log workers and vehicles entering site.'}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={exportPDF}
+            className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 flex items-center gap-2 font-medium transition-colors text-xs sm:text-sm"
+          >
+            <Download className="w-4 h-4" />
+            {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print / Export PDF'}
+          </button>
+          <SaveButton successMessage={lang === 'th' ? 'บันทึกข้อมูลผู้ปฏิบัติงานและยานพาหนะเรียบร้อยแล้ว' : 'Workers & vehicles saved successfully'} />
+        </div>
       </div>
 
       <div id="export-container" className="space-y-8 bg-white p-2">

@@ -3,6 +3,7 @@ import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, Download, Image as ImageIcon, X, Printer, Loader2 } from 'lucide-react';
 import { Report } from '../../types';
+import { SaveButton } from '../../components/SaveButton';
 
 const PrintableReport = ({ report, project, id, lang }: { report: Report, project: any, id: string, lang: string }) => (
   <div id={id} className="bg-white text-black mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '20mm' }}>
@@ -270,15 +271,21 @@ export function Reports({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      <div className="flex justify-between items-center print:hidden">
-        <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'รายงานโครงการ' : 'Project Reports'}</h3>
-        <button
-          onClick={() => setIsCreating(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          {lang === 'th' ? 'สร้างรายงาน' : 'Create Report'}
-        </button>
+      <div className="flex justify-between items-center border-b border-slate-200 pb-3 print:hidden">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'รายงานโครงการ' : 'Project Reports'}</h3>
+          <p className="text-xs text-slate-500">{lang === 'th' ? 'สรุปรายงานการปฏิบัติงาน รายวัน รายสัปดาห์ และรายเดือน' : 'Daily, weekly, and monthly project progress reports.'}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsCreating(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors text-xs sm:text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            {lang === 'th' ? 'สร้างรายงาน' : 'Create Report'}
+          </button>
+          <SaveButton successMessage={lang === 'th' ? 'บันทึกรายงานโครงการเรียบร้อยแล้ว' : 'Reports saved successfully'} />
+        </div>
       </div>
 
       <div className="space-y-4">

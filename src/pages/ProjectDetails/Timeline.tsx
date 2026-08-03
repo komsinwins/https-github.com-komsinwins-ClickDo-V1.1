@@ -2,6 +2,7 @@ import { useAppStore } from '../../store';
 import { differenceInDays, parseISO, addDays, format, isValid } from 'date-fns';
 import React, { useState } from 'react';
 import { GripVertical } from 'lucide-react';
+import { SaveButton } from '../../components/SaveButton';
 
 export function Timeline({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
@@ -98,6 +99,14 @@ export function Timeline({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'ตารางเวลา (Timeline)' : 'Timeline'}</h3>
+          <p className="text-xs text-slate-500">{lang === 'th' ? 'แสดงแผนการดำเนินงานบนกราฟ Gantt Chart' : 'View project schedule on Gantt Chart.'}</p>
+        </div>
+        <SaveButton successMessage={lang === 'th' ? 'บันทึกตารางเวลาเรียบร้อยแล้ว' : 'Timeline saved successfully'} />
+      </div>
+
       <div className="overflow-x-auto pb-4 border border-slate-200 rounded bg-white">
         <div className="inline-block min-w-full">
           {/* Header */}

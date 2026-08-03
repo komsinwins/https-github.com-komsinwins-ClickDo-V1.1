@@ -1,14 +1,17 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
 import { differenceInDays, parseISO, isValid, addDays, format, min, max } from 'date-fns';
-import { Download, Loader2, GripVertical, Plus, Trash2, BarChart, Table as TableIcon } from 'lucide-react';
+import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { ScopeOfWork as ScopeType } from '../../types';
+import { SaveButton } from '../../components/SaveButton';
 
 export function SchedulePlan({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
-  const [draggedId, setDraggedId] = useState<string | null>(null);
   const [newTask, setNewTask] = useState('');
   const [view, setView] = useState<'table' | 'gantt'>('table');
+  const [subTaskInputs, setSubTaskInputs] = useState<Record<string, string>>({});
+  const [showSubInput, setShowSubInput] = useState<Record<string, boolean>>({});
   
   const lang = data.language || 'th';
   const project = data.projects.find(p => p.id === projectId);
@@ -16,48 +19,63 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   const projectScopes = data.scopes
     .filter(s => s.projectId === projectId)
     .sort((a, b) => (a.order || 0) - (b.order || 0));
-    
+
+  const mainScopes = projectScopes.filter(s => !s.parentId);
+
   const [paperSize, setPaperSize] = useState<'a4' | 'a3'>('a4');
-  const [orientation, setOrientation] = useState<'p' | 'l'>('l');
-  const [isExporting, setIsExporting] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
   if (!project) return null;
 
-  // Calculate sequential dates based on order and durationDays
-  const sequentialDates = projectScopes.reduce((acc, scope, index) => {
-    let start = index === 0 
-      ? (isValid(parseISO(project.startDate)) ? parseISO(project.startDate) : new Date())
-      : addDays(acc[projectScopes[index - 1].id].end, 1);
-      
-    const duration = scope.durationDays || 1;
-    const end = addDays(start, duration > 0 ? duration - 1 : 0);
-    
-    acc[scope.id] = { start, end };
-    return acc;
-  }, {} as Record<string, { start: Date, end: Date }>);
+  // Calculate dates sequentially for main tasks and sub-tasks
+  const projectStartDate = isValid(parseISO(project.startDate)) ? parseISO(project.startDate) : new Date();
 
-  // Compute Gantt Chart Bounds
-  let minDate = isValid(parseISO(project.startDate)) ? parseISO(project.startDate) : new Date();
-  let maxDate = minDate;
-  
-  if (projectScopes.length > 0) {
-    const lastScope = projectScopes[projectScopes.length - 1];
-    maxDate = sequentialDates[lastScope.id].end;
+  // We compute date windows for all items
+  const itemCalculatedDates: Record<string, { start: Date; end: Date; duration: number }> = {};
+  let currentPointer = projectStartDate;
+
+  mainScopes.forEach(main => {
+    const subScopes = projectScopes.filter(s => s.parentId === main.id);
+    if (subScopes.length === 0) {
+      const dur = Math.max(1, main.durationDays || 1);
+      const start = currentPointer;
+      const end = addDays(start, dur - 1);
+      itemCalculatedDates[main.id] = { start, end, duration: dur };
+      currentPointer = addDays(end, 1);
+    } else {
+      let mainStart = currentPointer;
+      let totalDur = 0;
+      subScopes.forEach(sub => {
+        const dur = Math.max(1, sub.durationDays || 1);
+        const start = currentPointer;
+        const end = addDays(start, dur - 1);
+        itemCalculatedDates[sub.id] = { start, end, duration: dur };
+        totalDur += dur;
+        currentPointer = addDays(end, 1);
+      });
+      const mainEnd = addDays(mainStart, totalDur > 0 ? totalDur - 1 : 0);
+      itemCalculatedDates[main.id] = { start: mainStart, end: mainEnd, duration: totalDur };
+    }
+  });
+
+  // Bounds for Gantt view
+  let minDate = projectStartDate;
+  let maxDate = projectStartDate;
+
+  const calculatedEndDates = Object.values(itemCalculatedDates).map(d => d.end);
+  if (calculatedEndDates.length > 0) {
+    maxDate = max([projectStartDate, ...calculatedEndDates]);
   }
-  
+
   const validDates: Date[] = [minDate, maxDate];
   projectScopes.forEach(s => {
     if (s.actualStartDate && isValid(parseISO(s.actualStartDate))) validDates.push(parseISO(s.actualStartDate));
     if (s.actualEndDate && isValid(parseISO(s.actualEndDate))) validDates.push(parseISO(s.actualEndDate));
   });
 
-  if (validDates.length > 0) {
-    minDate = min(validDates);
-    maxDate = max(validDates);
-  }
-  
-  // Add some padding to dates
+  minDate = min(validDates);
+  maxDate = max(validDates);
+
   minDate = addDays(minDate, -2);
   maxDate = addDays(maxDate, 2);
   const totalDays = Math.max(1, differenceInDays(maxDate, minDate));
@@ -70,12 +88,45 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     });
   };
 
-  const handleAdd = () => {
+  const [taskType, setTaskType] = useState<'main' | 'sub'>('main');
+  const [selectedParentId, setSelectedParentId] = useState<string>('');
+
+  const handleAddTask = () => {
     if (!newTask.trim()) return;
-    const newScope = {
+
+    if (taskType === 'sub' && (selectedParentId || mainScopes[0]?.id)) {
+      const parentId = selectedParentId || mainScopes[0]?.id;
+      const subScope: ScopeType = {
+        id: uuidv4(),
+        projectId,
+        parentId,
+        taskName: newTask.trim(),
+        order: projectScopes.length,
+        durationDays: 1,
+        progress: 0,
+      };
+      updateData({ scopes: [...data.scopes, subScope] });
+      setNewTask('');
+    } else {
+      const newScope: ScopeType = {
+        id: uuidv4(),
+        projectId,
+        taskName: newTask.trim(),
+        order: projectScopes.length,
+        durationDays: 1,
+        progress: 0,
+      };
+      updateData({ scopes: [...data.scopes, newScope] });
+      setNewTask('');
+    }
+  };
+
+  const handleAddMain = () => {
+    if (!newTask.trim()) return;
+    const newScope: ScopeType = {
       id: uuidv4(),
       projectId,
-      taskName: newTask,
+      taskName: newTask.trim(),
       order: projectScopes.length,
       durationDays: 1,
       progress: 0,
@@ -84,43 +135,28 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     setNewTask('');
   };
 
+  const handleAddSub = (parentId: string) => {
+    const name = subTaskInputs[parentId];
+    if (!name || !name.trim()) return;
+    const subScope: ScopeType = {
+      id: uuidv4(),
+      projectId,
+      parentId,
+      taskName: name.trim(),
+      order: projectScopes.length,
+      durationDays: 1,
+      progress: 0,
+    };
+    updateData({ scopes: [...data.scopes, subScope] });
+    setSubTaskInputs({ ...subTaskInputs, [parentId]: '' });
+    setShowSubInput({ ...showSubInput, [parentId]: false });
+  };
+
   const handleDelete = (id: string) => {
     if (!window.confirm(lang === 'th' ? 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?' : 'Are you sure you want to delete this item?')) return;
     updateData({
-      scopes: data.scopes.filter(s => s.id !== id)
+      scopes: data.scopes.filter(s => s.id !== id && s.parentId !== id)
     });
-  };
-
-  const handleDragStart = (e: React.DragEvent, id: string) => {
-    setDraggedId(id);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    if (!draggedId || draggedId === targetId) return;
-
-    const currentScopes = [...projectScopes];
-    const draggedIdx = currentScopes.findIndex(s => s.id === draggedId);
-    const targetIdx = currentScopes.findIndex(s => s.id === targetId);
-    
-    const [draggedItem] = currentScopes.splice(draggedIdx, 1);
-    currentScopes.splice(targetIdx, 0, draggedItem);
-    
-    const updatedScopes = data.scopes.map(s => {
-      if (s.projectId === projectId) {
-        const newOrder = currentScopes.findIndex(cs => cs.id === s.id);
-        return { ...s, order: newOrder !== -1 ? newOrder : (s.order || 0) };
-      }
-      return s;
-    });
-    
-    updateData({ scopes: updatedScopes });
-    setDraggedId(null);
   };
 
   const exportPDF = () => {
@@ -129,7 +165,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-3 rounded-lg border border-slate-200">
+      {/* Controls Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
         <div className="flex gap-3 w-full sm:w-auto flex-wrap">
           <div className="flex bg-slate-100 p-1 rounded-md mb-2 sm:mb-0 w-full sm:w-auto">
             <button
@@ -148,276 +185,590 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
             </button>
           </div>
           
-          <div className="flex gap-2 flex-1 min-w-[200px]">
+          <div className="flex flex-wrap sm:flex-nowrap gap-2 flex-1 min-w-[280px]">
+            <select
+              value={taskType}
+              onChange={(e) => setTaskType(e.target.value as 'main' | 'sub')}
+              className="px-2 py-1.5 text-xs font-semibold border border-slate-300 rounded bg-slate-50 text-slate-700 outline-none focus:border-[#0061FF]"
+            >
+              <option value="main">{lang === 'th' ? 'งานหลัก' : 'Main Task'}</option>
+              {mainScopes.length > 0 && (
+                <option value="sub">{lang === 'th' ? 'งานย่อย' : 'Sub Task'}</option>
+              )}
+            </select>
+
+            {taskType === 'sub' && mainScopes.length > 0 && (
+              <select
+                value={selectedParentId || mainScopes[0]?.id}
+                onChange={(e) => setSelectedParentId(e.target.value)}
+                className="px-2 py-1.5 text-xs border border-slate-300 rounded bg-white text-slate-700 max-w-[160px] truncate outline-none focus:border-[#0061FF]"
+              >
+                {mainScopes.map((m, idx) => (
+                  <option key={m.id} value={m.id}>
+                    {idx + 1}. {m.taskName}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <input
               type="text"
               value={newTask}
               onChange={(e) => setNewTask(e.target.value)}
-              placeholder={lang === 'th' ? 'กรอกชื่องาน / หัวข้อ...' : 'Enter task/topic name...'}
-              className="flex-1 sm:w-64 px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF]"
-              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+              placeholder={
+                taskType === 'sub'
+                  ? (lang === 'th' ? 'กรอกชื่อขอบเขตงานย่อย...' : 'Enter sub-task name...')
+                  : (lang === 'th' ? 'กรอกชื่อขอบเขตงานหลัก...' : 'Enter main task name...')
+              }
+              className="flex-1 min-w-[150px] px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF]"
+              onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
             />
             <button
-              onClick={handleAdd}
-              className="px-4 py-1.5 bg-[#0061FF] text-white rounded text-sm font-semibold hover:bg-blue-700 flex items-center gap-2 flex-shrink-0"
+              onClick={handleAddTask}
+              className="px-4 py-1.5 bg-[#0061FF] text-white rounded text-sm font-semibold hover:bg-blue-700 flex items-center gap-1.5 flex-shrink-0"
             >
               <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">{lang === 'th' ? 'เพิ่มหัวข้อ' : 'Add Topic'}</span>
+              <span>
+                {taskType === 'sub'
+                  ? (lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task')
+                  : (lang === 'th' ? 'เพิ่มงานหลัก' : 'Add Main Task')}
+              </span>
             </button>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
+          <style>{`
+            @media print {
+              @page {
+                size: ${paperSize.toUpperCase()} landscape;
+                margin: 8mm;
+              }
+              body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                background-color: white !important;
+              }
+              .print\\:hidden {
+                display: none !important;
+              }
+              input {
+                border: none !important;
+                background: transparent !important;
+              }
+            }
+          `}</style>
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500">{lang === 'th' ? 'กระดาษ:' : 'Paper:'}</span>
+            <span className="text-slate-500 font-medium">{lang === 'th' ? 'ขนาดกระดาษ PDF:' : 'PDF Paper Size:'}</span>
             <select
               value={paperSize}
               onChange={(e) => setPaperSize(e.target.value as 'a4' | 'a3')}
-              className="border border-slate-200 rounded px-2 py-1 bg-white outline-none focus:border-[#0061FF]"
+              className="border border-slate-300 rounded px-2.5 py-1 bg-white font-medium text-slate-700 outline-none focus:border-[#0061FF]"
             >
-              <option value="a4">A4</option>
-              <option value="a3">A3</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500">{lang === 'th' ? 'แนว:' : 'Orient:'}</span>
-            <select
-              value={orientation}
-              onChange={(e) => setOrientation(e.target.value as 'p' | 'l')}
-              className="border border-slate-200 rounded px-2 py-1 bg-white outline-none focus:border-[#0061FF]"
-            >
-              <option value="p">{lang === 'th' ? 'ตั้ง' : 'Portrait'}</option>
-              <option value="l">{lang === 'th' ? 'นอน' : 'Landscape'}</option>
+              <option value="a4">{lang === 'th' ? 'A4 (แนวนอน)' : 'A4 (Landscape)'}</option>
+              <option value="a3">{lang === 'th' ? 'A3 (แนวนอน)' : 'A3 (Landscape)'}</option>
             </select>
           </div>
           <button
             onClick={exportPDF}
-            className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700 flex items-center gap-2 transition-colors disabled:opacity-50 print:hidden"
+            className="px-3.5 py-1.5 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 flex items-center gap-2 transition-colors print:hidden shadow-sm"
           >
             <Download className="w-3.5 h-3.5" />
             {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print / Export PDF'}
           </button>
+          <SaveButton successMessage={lang === 'th' ? 'บันทึกแผนงานเรียบร้อยแล้ว' : 'Schedule plan saved successfully'} />
         </div>
       </div>
 
-      <div className="overflow-x-auto border border-slate-200 rounded bg-white" ref={reportRef} style={{ background: 'white', padding: '16px' }}>
-        <h3 className="text-lg font-bold text-slate-800 mb-4 text-center">{lang === 'th' ? 'แผนงานและผลการดำเนินงาน' : 'Schedule & Actual Progress'}</h3>
+      <div className="overflow-x-auto border border-slate-200 rounded-lg bg-white p-4 shadow-sm" ref={reportRef}>
+        <div className="mb-4 text-center border-b pb-3 border-slate-200">
+          <h3 className="text-xl font-bold text-slate-800">{lang === 'th' ? 'ตารางประเมินและประเมินระยะเวลาการทำงาน (Schedule Plan)' : 'Schedule & Duration Estimation Plan'}</h3>
+          <p className="text-xs text-slate-500 mt-1">{project.name} | {lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start Date:'} {format(projectStartDate, 'dd/MM/yyyy')}</p>
+        </div>
         
         {view === 'table' ? (
-          <table className="w-full text-left text-[11px] sm:text-xs border-collapse min-w-[900px]">
-          <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200">
-            <tr>
-              <th className="p-2 font-semibold w-8"></th>
-              <th className="p-2 font-semibold border-r border-slate-200 w-1/4">{lang === 'th' ? 'ชื่องาน' : 'Task Name'}</th>
-              <th className="p-2 font-semibold text-center border-r border-slate-200" colSpan={3}>{lang === 'th' ? 'แผนงาน (Baseline)' : 'Baseline'}</th>
-              <th className="p-2 font-semibold text-center border-r border-slate-200" colSpan={3}>{lang === 'th' ? 'จริง (Actual)' : 'Actual'}</th>
-              <th className="p-2 font-semibold text-center border-r border-slate-200">{lang === 'th' ? '% คืบหน้า' : '% Progress'}</th>
-              <th className="p-2 font-semibold text-center w-10"></th>
-            </tr>
-            <tr className="bg-white border-b border-slate-200 text-[10px]">
-              <th className="p-1.5 border-r border-slate-200" colSpan={2}></th>
-              <th className="p-1.5 text-center text-slate-500 bg-[#F1F5F9]">{lang === 'th' ? 'ระยะเวลา (วัน)' : 'Duration'}</th>
-              <th className="p-1.5 text-center text-slate-500 bg-[#F1F5F9]">{lang === 'th' ? 'เริ่ม' : 'Start'}</th>
-              <th className="p-1.5 text-center text-slate-500 bg-[#F1F5F9] border-r border-slate-200">{lang === 'th' ? 'สิ้นสุด' : 'End'}</th>
-              
-              <th className="p-1.5 text-center text-slate-500 bg-[#F1F5F9]">{lang === 'th' ? 'เริ่ม' : 'Start'}</th>
-              <th className="p-1.5 text-center text-slate-500 bg-[#F1F5F9]">{lang === 'th' ? 'สิ้นสุด' : 'End'}</th>
-              <th className="p-1.5 text-center text-slate-500 bg-[#F1F5F9] border-r border-slate-200">{lang === 'th' ? 'ระยะเวลา' : 'Duration'}</th>
-              
-              <th className="p-1.5 text-center text-slate-500 bg-[#F1F5F9]" colSpan={2}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {projectScopes.length === 0 ? (
+          <table className="w-full text-left text-[11px] sm:text-xs border-collapse min-w-[950px]">
+            <thead className="bg-[#F8FAFC] text-slate-700 border-b-2 border-slate-300">
               <tr>
-                <td colSpan={10} className="p-6 text-center text-slate-500">
-                  {lang === 'th' ? 'ยังไม่มีขอบเขตงาน' : 'No Scope of Work defined yet.'}
-                </td>
+                <th className="p-2 font-semibold w-12 text-center">{lang === 'th' ? 'ลำดับ' : 'No.'}</th>
+                <th className="p-2 font-semibold border-r border-slate-200 w-1/3">{lang === 'th' ? 'ขอบเขตงาน / หัวข้อย่อย' : 'Scope / Sub-topic'}</th>
+                <th className="p-2 font-semibold text-center border-r border-slate-200" colSpan={3}>{lang === 'th' ? 'แผนงาน (Baseline)' : 'Baseline'}</th>
+                <th className="p-2 font-semibold text-center border-r border-slate-200" colSpan={3}>{lang === 'th' ? 'ผลจริง (Actual)' : 'Actual'}</th>
+                <th className="p-2 font-semibold text-center border-r border-slate-200">{lang === 'th' ? '% คืบหน้า' : '% Progress'}</th>
+                <th className="p-2 font-semibold text-center w-20">{lang === 'th' ? 'จัดการ' : 'Action'}</th>
               </tr>
-            ) : (
-              projectScopes.map(scope => {
-                const calculatedDates = sequentialDates[scope.id];
-                
-                let actualDuration = 0;
-                if (scope.actualStartDate && scope.actualEndDate && isValid(parseISO(scope.actualStartDate)) && isValid(parseISO(scope.actualEndDate))) {
-                  actualDuration = differenceInDays(parseISO(scope.actualEndDate), parseISO(scope.actualStartDate)) + 1;
-                }
+              <tr className="bg-slate-100 border-b border-slate-200 text-[10px] text-slate-600">
+                <th className="p-1.5 border-r border-slate-200" colSpan={2}></th>
+                <th className="p-1.5 text-center bg-blue-50/50">{lang === 'th' ? 'จำนวนวัน' : 'Days'}</th>
+                <th className="p-1.5 text-center bg-blue-50/50">{lang === 'th' ? 'เริ่ม' : 'Start'}</th>
+                <th className="p-1.5 text-center bg-blue-50/50 border-r border-slate-200">{lang === 'th' ? 'สิ้นสุด' : 'End'}</th>
+                <th className="p-1.5 text-center bg-orange-50/50">{lang === 'th' ? 'เริ่ม' : 'Start'}</th>
+                <th className="p-1.5 text-center bg-orange-50/50">{lang === 'th' ? 'สิ้นสุด' : 'End'}</th>
+                <th className="p-1.5 text-center bg-orange-50/50 border-r border-slate-200">{lang === 'th' ? 'จำนวนวัน' : 'Days'}</th>
+                <th className="p-1.5 border-r border-slate-200"></th>
+                <th className="p-1.5"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 bg-white">
+              {mainScopes.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="p-8 text-center text-slate-500">
+                    {lang === 'th' ? 'ยังไม่มีขอบเขตงาน กรุณากรอกชื่อขอบเขตงานหลักด้านบน' : 'No Scope of Work defined yet. Enter topic above.'}
+                  </td>
+                </tr>
+              ) : (
+                mainScopes.map((main, mainIdx) => {
+                  const subScopes = projectScopes.filter(s => s.parentId === main.id);
+                  const hasSubs = subScopes.length > 0;
+                  const mainDates = itemCalculatedDates[main.id] || { start: new Date(), end: new Date(), duration: 1 };
 
-                return (
-                  <tr 
-                    key={scope.id} 
-                    className={`hover:bg-slate-50 transition-colors ${draggedId === scope.id ? 'opacity-50' : ''}`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, scope.id)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, scope.id)}
-                  >
-                    <td className="p-2 cursor-grab active:cursor-grabbing text-slate-400">
-                      <GripVertical className="w-3 h-3 mx-auto" />
-                    </td>
-                    <td className="p-2 font-medium text-slate-800 border-r border-slate-200">
-                      <input
-                        type="text"
-                        value={scope.taskName}
-                        onChange={(e) => handleUpdate(scope.id, 'taskName', e.target.value)}
-                        className="w-full border-transparent border-b border-b-slate-200 hover:border-slate-300 focus:border-[#0061FF] focus:outline-none p-1 bg-transparent"
-                      />
-                    </td>
-                    
-                    {/* Baseline */}
-                    <td className="p-2 text-center bg-slate-50/50">
-                      <input
-                        type="number"
-                        min="1"
-                        value={scope.durationDays || 1}
-                        onChange={(e) => handleUpdate(scope.id, 'durationDays', parseInt(e.target.value) || 1)}
-                        className="w-12 border border-slate-200 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white mx-auto"
-                      />
-                    </td>
-                    <td className="p-2 text-center text-slate-500 bg-slate-50/50">{format(calculatedDates.start, 'dd/MM/yyyy')}</td>
-                    <td className="p-2 text-center text-slate-500 bg-slate-50/50 border-r border-slate-200">{format(calculatedDates.end, 'dd/MM/yyyy')}</td>
-                    
-                    {/* Actual */}
-                    <td className="p-2 text-center">
-                      <input
-                        type="date"
-                        value={scope.actualStartDate || ''}
-                        onChange={(e) => handleUpdate(scope.id, 'actualStartDate', e.target.value)}
-                        className="w-full border border-slate-200 rounded focus:border-[#0061FF] focus:outline-none p-1 text-xs bg-white"
-                      />
-                    </td>
-                    <td className="p-2 text-center">
-                      <input
-                        type="date"
-                        value={scope.actualEndDate || ''}
-                        onChange={(e) => handleUpdate(scope.id, 'actualEndDate', e.target.value)}
-                        className="w-full border border-slate-200 rounded focus:border-[#0061FF] focus:outline-none p-1 text-xs bg-white"
-                      />
-                    </td>
-                    <td className="p-2 text-center border-r border-slate-200 text-slate-500">
-                      {actualDuration > 0 ? `${actualDuration}` : '-'}
-                    </td>
-                    
-                    <td className="p-2 text-center border-r border-slate-200">
-                      <div className="flex items-center justify-center gap-1">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={scope.progress}
-                          onChange={(e) => handleUpdate(scope.id, 'progress', parseInt(e.target.value) || 0)}
-                          className="w-12 border border-slate-200 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-[#FF5E00] font-bold"
-                        />
-                        <span className="text-slate-500 text-[10px]">%</span>
-                      </div>
-                    </td>
-                    
-                    <td className="p-2 text-center">
-                      <button
-                        onClick={() => handleDelete(scope.id)}
-                        className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
-                        title={lang === 'th' ? 'ลบ' : 'Delete'}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                  let mainActualDur = 0;
+                  if (main.actualStartDate && main.actualEndDate && isValid(parseISO(main.actualStartDate)) && isValid(parseISO(main.actualEndDate))) {
+                    mainActualDur = differenceInDays(parseISO(main.actualEndDate), parseISO(main.actualStartDate)) + 1;
+                  }
+
+                  return (
+                    <React.Fragment key={main.id}>
+                      {/* Main Task Row */}
+                      <tr className="hover:bg-slate-50 bg-slate-100/70 font-semibold text-slate-900 border-t-2 border-slate-200">
+                        <td className="p-2 text-center text-slate-800">{mainIdx + 1}</td>
+                        <td className="p-2 border-r border-slate-200">
+                          <input
+                            type="text"
+                            value={main.taskName}
+                            onChange={(e) => handleUpdate(main.id, 'taskName', e.target.value)}
+                            className="w-full border-transparent border-b border-b-slate-300 focus:border-[#0061FF] focus:outline-none p-1 bg-transparent font-bold text-slate-900"
+                          />
+                        </td>
+
+                        {/* Baseline */}
+                        <td className="p-2 text-center bg-blue-50/30">
+                          {hasSubs ? (
+                            <span className="font-bold text-[#0061FF]">{mainDates.duration} {lang === 'th' ? 'วัน' : 'days'}</span>
+                          ) : (
+                            <input
+                              type="number"
+                              min="1"
+                              value={main.durationDays || 1}
+                              onChange={(e) => handleUpdate(main.id, 'durationDays', parseInt(e.target.value) || 1)}
+                              className="w-14 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white font-bold"
+                            />
+                          )}
+                        </td>
+                        <td className="p-2 text-center text-slate-700 bg-blue-50/30 font-medium">{format(mainDates.start, 'dd/MM/yyyy')}</td>
+                        <td className="p-2 text-center text-slate-700 bg-blue-50/30 border-r border-slate-200 font-medium">{format(mainDates.end, 'dd/MM/yyyy')}</td>
+
+                        {/* Actual */}
+                        <td className="p-2 text-center bg-orange-50/20">
+                          <input
+                            type="date"
+                            value={main.actualStartDate || ''}
+                            onChange={(e) => handleUpdate(main.id, 'actualStartDate', e.target.value)}
+                            className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                          />
+                        </td>
+                        <td className="p-2 text-center bg-orange-50/20">
+                          <input
+                            type="date"
+                            value={main.actualEndDate || ''}
+                            onChange={(e) => handleUpdate(main.id, 'actualEndDate', e.target.value)}
+                            className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                          />
+                        </td>
+                        <td className="p-2 text-center border-r border-slate-200 text-slate-700 font-medium bg-orange-50/20">
+                          {mainActualDur > 0 ? `${mainActualDur}` : '-'}
+                        </td>
+
+                        {/* Progress */}
+                        <td className="p-2 text-center border-r border-slate-200">
+                          <div className="flex items-center justify-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={main.progress}
+                              onChange={(e) => handleUpdate(main.id, 'progress', parseInt(e.target.value) || 0)}
+                              className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white font-bold text-[#FF5E00]"
+                            />
+                            <span className="text-slate-500">%</span>
+                          </div>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="p-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setShowSubInput({ ...showSubInput, [main.id]: !showSubInput[main.id] })}
+                              className="p-1 text-xs bg-blue-50 text-[#0061FF] hover:bg-blue-100 rounded font-semibold flex items-center gap-0.5"
+                              title={lang === 'th' ? 'แทรกหัวข้อย่อย' : 'Add Sub-topic'}
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span className="text-[10px]">{lang === 'th' ? 'ย่อย' : 'Sub'}</span>
+                            </button>
+                            <button
+                              onClick={() => handleDelete(main.id)}
+                              className="p-1 text-red-500 hover:bg-red-50 rounded"
+                              title={lang === 'th' ? 'ลบ' : 'Delete'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Sub-Task Rows */}
+                      {subScopes.map((sub, subIdx) => {
+                        const subDates = itemCalculatedDates[sub.id] || { start: new Date(), end: new Date(), duration: 1 };
+                        let subActualDur = 0;
+                        if (sub.actualStartDate && sub.actualEndDate && isValid(parseISO(sub.actualStartDate)) && isValid(parseISO(sub.actualEndDate))) {
+                          subActualDur = differenceInDays(parseISO(sub.actualEndDate), parseISO(sub.actualStartDate)) + 1;
+                        }
+
+                        return (
+                          <tr key={sub.id} className="hover:bg-slate-50/80 bg-white text-slate-700">
+                            <td className="p-2 text-center text-slate-500 text-[10px] pl-4">{mainIdx + 1}.{subIdx + 1}</td>
+                            <td className="p-2 pl-6 border-r border-slate-200">
+                              <div className="flex items-center gap-1.5">
+                                <CornerDownRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                <input
+                                  type="text"
+                                  value={sub.taskName}
+                                  onChange={(e) => handleUpdate(sub.id, 'taskName', e.target.value)}
+                                  className="w-full border-transparent border-b border-b-slate-200 focus:border-[#0061FF] focus:outline-none p-1 bg-transparent text-slate-800"
+                                />
+                              </div>
+                            </td>
+
+                            {/* Baseline */}
+                            <td className="p-2 text-center bg-blue-50/10">
+                              <input
+                                type="number"
+                                min="1"
+                                value={sub.durationDays || 1}
+                                onChange={(e) => handleUpdate(sub.id, 'durationDays', parseInt(e.target.value) || 1)}
+                                className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs"
+                              />
+                            </td>
+                            <td className="p-2 text-center text-slate-600 bg-blue-50/10">{format(subDates.start, 'dd/MM/yyyy')}</td>
+                            <td className="p-2 text-center text-slate-600 bg-blue-50/10 border-r border-slate-200">{format(subDates.end, 'dd/MM/yyyy')}</td>
+
+                            {/* Actual */}
+                            <td className="p-2 text-center bg-orange-50/10">
+                              <input
+                                type="date"
+                                value={sub.actualStartDate || ''}
+                                onChange={(e) => handleUpdate(sub.id, 'actualStartDate', e.target.value)}
+                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                              />
+                            </td>
+                            <td className="p-2 text-center bg-orange-50/10">
+                              <input
+                                type="date"
+                                value={sub.actualEndDate || ''}
+                                onChange={(e) => handleUpdate(sub.id, 'actualEndDate', e.target.value)}
+                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                              />
+                            </td>
+                            <td className="p-2 text-center border-r border-slate-200 text-slate-600 bg-orange-50/10">
+                              {subActualDur > 0 ? `${subActualDur}` : '-'}
+                            </td>
+
+                            {/* Progress */}
+                            <td className="p-2 text-center border-r border-slate-200">
+                              <div className="flex items-center justify-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={sub.progress}
+                                  onChange={(e) => handleUpdate(sub.id, 'progress', parseInt(e.target.value) || 0)}
+                                  className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs font-semibold text-[#FF5E00]"
+                                />
+                                <span className="text-slate-400 text-[10px]">%</span>
+                              </div>
+                            </td>
+
+                            {/* Delete */}
+                            <td className="p-2 text-center">
+                              <button
+                                onClick={() => handleDelete(sub.id)}
+                                className="p-1 text-red-400 hover:bg-red-50 rounded"
+                                title={lang === 'th' ? 'ลบหัวข้อย่อย' : 'Delete Sub-topic'}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {/* Quick Sub-topic input */}
+                      {showSubInput[main.id] ? (
+                        <tr className="bg-blue-50/30 border-t border-b border-blue-100">
+                          <td className="p-2 text-center text-xs text-blue-500 font-bold">{mainIdx + 1}.{subScopes.length + 1}</td>
+                          <td className="p-2 pl-6" colSpan={8}>
+                            <div className="flex items-center gap-2">
+                              <CornerDownRight className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                              <input
+                                type="text"
+                                value={subTaskInputs[main.id] || ''}
+                                onChange={(e) => setSubTaskInputs({ ...subTaskInputs, [main.id]: e.target.value })}
+                                placeholder={lang === 'th' ? 'แทรกหัวข้อย่อยใหม่ แล้วกด Enter...' : 'Enter sub-topic name and hit Enter...'}
+                                className="flex-1 px-3 py-1 text-xs border border-blue-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddSub(main.id)}
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleAddSub(main.id)}
+                                className="px-3 py-1 bg-[#0061FF] text-white rounded text-xs font-semibold hover:bg-blue-700"
+                              >
+                                {lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task'}
+                              </button>
+                              <button
+                                onClick={() => setShowSubInput({ ...showSubInput, [main.id]: false })}
+                                className="px-2 py-1 text-xs text-slate-500 hover:text-slate-700"
+                              >
+                                {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-2"></td>
+                        </tr>
+                      ) : (
+                        <tr className="bg-slate-50/30 hover:bg-slate-100/50">
+                          <td className="p-1"></td>
+                          <td className="p-1.5 pl-6" colSpan={9}>
+                            <button
+                              onClick={() => setShowSubInput({ ...showSubInput, [main.id]: true })}
+                              className="text-[11px] text-[#0061FF] hover:text-blue-800 font-semibold inline-flex items-center gap-1 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>{lang === 'th' ? `เพิ่มงานย่อยใน ${main.taskName}` : `Add sub-task to ${main.taskName}`}</span>
+                            </button>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         ) : (
+          /* Gantt Chart View */
           <div className="p-4 min-w-[800px]">
-            {projectScopes.length === 0 ? (
+            {mainScopes.length === 0 ? (
               <p className="text-center text-slate-500">{lang === 'th' ? 'ไม่มีข้อมูลงาน' : 'No tasks available.'}</p>
             ) : (
               <div className="relative pt-6">
                 {/* Timeline Header */}
-                <div className="flex border-b border-slate-200 pb-2 mb-4 text-[10px] text-slate-500 relative pl-[200px]">
-                  <div className="absolute left-0 bottom-2 w-[190px] font-semibold text-slate-700 text-xs">{lang === 'th' ? 'ชื่องาน' : 'Task'}</div>
-                  <div className="flex-1 flex justify-between">
+                <div className="flex border-b border-slate-200 pb-2 mb-4 text-[10px] text-slate-500 relative pl-[240px]">
+                  <div className="absolute left-0 bottom-2 w-[230px] font-semibold text-slate-700 text-xs">{lang === 'th' ? 'ขอบเขตงาน / หัวข้อย่อย' : 'Task Scope'}</div>
+                  <div className="flex-1 flex justify-between font-mono">
                     <span>{format(minDate, 'dd MMM yyyy')}</span>
                     <span>{format(maxDate, 'dd MMM yyyy')}</span>
                   </div>
                 </div>
 
-                {/* Tasks */}
-                <div className="space-y-4">
-                  {projectScopes.map(scope => {
-                    const calculatedDates = sequentialDates[scope.id];
-                    let bStart = 0;
-                    let bWidth = 0;
+                {/* Tasks Bars */}
+                <div className="space-y-3">
+                  {mainScopes.map((main, mainIdx) => {
+                    const subScopes = projectScopes.filter(s => s.parentId === main.id);
+                    const hasSubs = subScopes.length > 0;
+                    const mainDates = itemCalculatedDates[main.id] || { start: minDate, end: maxDate, duration: 1 };
                     
-                    const startOffset = differenceInDays(calculatedDates.start, minDate);
-                    const duration = (scope.durationDays || 1);
-                    
-                    bStart = Math.max(0, (startOffset / totalDays) * 100);
-                    bWidth = Math.min(100 - bStart, (duration / totalDays) * 100);
+                    const mStartOffset = differenceInDays(mainDates.start, minDate);
+                    const mStart = Math.max(0, (mStartOffset / totalDays) * 100);
+                    const mWidth = Math.min(100 - mStart, (mainDates.duration / totalDays) * 100);
 
-                    let aStart = 0;
-                    let aWidth = 0;
-                    if (scope.actualStartDate && isValid(parseISO(scope.actualStartDate))) {
-                      const actualEnd = scope.actualEndDate && isValid(parseISO(scope.actualEndDate)) 
-                        ? parseISO(scope.actualEndDate) 
+                    const mainProgress = hasSubs 
+                      ? (subScopes.length > 0 ? Math.round(subScopes.reduce((acc, s) => acc + (s.progress || 0), 0) / subScopes.length) : 0)
+                      : (main.progress || 0);
+
+                    let mAStart = 0;
+                    let mAWidth = 0;
+                    if (main.actualStartDate && isValid(parseISO(main.actualStartDate))) {
+                      const actualEnd = main.actualEndDate && isValid(parseISO(main.actualEndDate)) 
+                        ? parseISO(main.actualEndDate) 
                         : new Date();
-                        
-                      const actualStartOffset = differenceInDays(parseISO(scope.actualStartDate), minDate);
-                      const actualDur = differenceInDays(actualEnd, parseISO(scope.actualStartDate)) + 1;
-                      
-                      aStart = Math.max(0, (actualStartOffset / totalDays) * 100);
-                      aWidth = Math.min(100 - aStart, (actualDur / totalDays) * 100);
+                      const actualStartOffset = differenceInDays(parseISO(main.actualStartDate), minDate);
+                      const actualDur = differenceInDays(actualEnd, parseISO(main.actualStartDate)) + 1;
+                      mAStart = Math.max(0, (actualStartOffset / totalDays) * 100);
+                      mAWidth = Math.min(100 - mAStart, (actualDur / totalDays) * 100);
                     }
 
                     return (
-                      <div 
-                        key={scope.id} 
-                        className={`relative flex items-center group ${draggedId === scope.id ? 'opacity-50' : ''}`}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, scope.id)}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, scope.id)}
-                      >
-                        <div className="w-[190px] flex-shrink-0 text-xs text-slate-700 font-medium truncate pr-4 flex items-center cursor-grab active:cursor-grabbing">
-                          <GripVertical className="w-3 h-3 text-slate-400 mr-2 flex-shrink-0" />
-                          <span title={scope.taskName} className="truncate">{scope.taskName}</span>
-                        </div>
-                        
-                        <div className="flex-1 h-10 relative bg-slate-50 rounded border border-slate-100">
-                          {bWidth > 0 && (
-                            <div 
-                              className="absolute top-1 h-3 rounded-full bg-[#0061FF]/30 border border-[#0061FF]/50"
-                              style={{ left: `${bStart}%`, width: `${bWidth}%` }}
-                              title={`${lang === 'th' ? 'แผน:' : 'Baseline:'} ${format(calculatedDates.start, 'dd/MM/yyyy')} - ${format(calculatedDates.end, 'dd/MM/yyyy')}`}
-                            />
-                          )}
+                      <div key={main.id} className="space-y-2">
+                        {/* Parent Bar */}
+                        <div className="relative flex items-center bg-slate-50 p-1 rounded border border-slate-200">
+                          <div className="w-[230px] flex-shrink-0 text-xs text-slate-900 font-bold truncate pr-2 flex items-center justify-between">
+                            <div className="flex items-center truncate">
+                              <span className="w-5 text-slate-500 text-[11px] text-center flex-shrink-0">{mainIdx + 1}.</span>
+                              <span title={main.taskName} className="truncate">{main.taskName}</span>
+                            </div>
+                            <button
+                              onClick={() => setShowSubInput({ ...showSubInput, [main.id]: !showSubInput[main.id] })}
+                              className="ml-1 px-1.5 py-0.5 text-[10px] bg-blue-50 hover:bg-blue-100 text-[#0061FF] rounded font-semibold flex items-center gap-0.5 flex-shrink-0"
+                              title={lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task'}
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>{lang === 'th' ? 'ย่อย' : 'Sub'}</span>
+                            </button>
+                          </div>
                           
-                          {aWidth > 0 && (
-                            <div 
-                              className={`absolute bottom-1 h-3 rounded-full ${scope.progress === 100 ? 'bg-[#22C55E]' : 'bg-[#FF5E00]'}`}
-                              style={{ left: `${aStart}%`, width: `${aWidth}%` }}
-                              title={`${lang === 'th' ? 'จริง:' : 'Actual:'} ${scope.actualStartDate} - ${scope.actualEndDate || (lang === 'th' ? 'กำลังดำเนินการ' : 'Ongoing')}`}
-                            />
-                          )}
+                          <div className="flex-1 h-7 relative bg-white rounded border border-slate-100 overflow-hidden">
+                            {/* Baseline Container Bar */}
+                            {mWidth > 0 && (
+                              <div 
+                                className="absolute top-1 h-5 rounded bg-blue-100 border border-blue-400/70 overflow-hidden flex items-center shadow-xs"
+                                style={{ left: `${mStart}%`, width: `${mWidth}%` }}
+                                title={`${lang === 'th' ? 'แผนงาน' : 'Baseline'} ${main.taskName}: ${format(mainDates.start, 'dd/MM/yyyy')} - ${format(mainDates.end, 'dd/MM/yyyy')} (${mainDates.duration} ${lang === 'th' ? 'วัน' : 'days'})`}
+                              >
+                                {/* Inner Actual Progress Fill inside Baseline */}
+                                {mAWidth === 0 && mainProgress > 0 && (
+                                  <div 
+                                    className={`h-full transition-all ${mainProgress === 100 ? 'bg-emerald-500' : 'bg-[#0061FF]'}`}
+                                    style={{ width: `${mainProgress}%` }}
+                                  />
+                                )}
+                                <span className="absolute left-2 text-[10px] font-bold text-slate-800 whitespace-nowrap drop-shadow-xs z-10">
+                                  {mainDates.duration} {lang === 'th' ? 'วัน' : 'd'} ({mainProgress}%)
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Actual Dates Bar Overlay if custom actual dates provided */}
+                            {mAWidth > 0 && (
+                              <div 
+                                className={`absolute top-1.5 h-4 rounded opacity-90 shadow-sm flex items-center px-1.5 ${mainProgress === 100 ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'}`}
+                                style={{ left: `${mAStart}%`, width: `${mAWidth}%` }}
+                                title={`${lang === 'th' ? 'ผลจริง' : 'Actual'} ${main.taskName}: ${main.actualStartDate} - ${main.actualEndDate || 'Ongoing'}`}
+                              >
+                                <span className="text-[9px] font-bold truncate">
+                                  {lang === 'th' ? 'จริง' : 'Act'}: {mainProgress}%
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Sub Tasks Bars */}
+                        {subScopes.map((sub, subIdx) => {
+                          const subDates = itemCalculatedDates[sub.id] || { start: minDate, end: maxDate, duration: 1 };
+                          const sStartOffset = differenceInDays(subDates.start, minDate);
+                          const sStart = Math.max(0, (sStartOffset / totalDays) * 100);
+                          const sWidth = Math.min(100 - sStart, (subDates.duration / totalDays) * 100);
+
+                          let aStart = 0;
+                          let aWidth = 0;
+                          if (sub.actualStartDate && isValid(parseISO(sub.actualStartDate))) {
+                            const actualEnd = sub.actualEndDate && isValid(parseISO(sub.actualEndDate)) 
+                              ? parseISO(sub.actualEndDate) 
+                              : new Date();
+                              
+                            const actualStartOffset = differenceInDays(parseISO(sub.actualStartDate), minDate);
+                            const actualDur = differenceInDays(actualEnd, parseISO(sub.actualStartDate)) + 1;
+                            
+                            aStart = Math.max(0, (actualStartOffset / totalDays) * 100);
+                            aWidth = Math.min(100 - aStart, (actualDur / totalDays) * 100);
+                          }
+
+                          return (
+                            <div key={sub.id} className="relative flex items-center pl-4">
+                              <div className="w-[214px] flex-shrink-0 text-xs text-slate-600 font-medium truncate pr-3 flex items-center">
+                                <CornerDownRight className="w-3 h-3 text-slate-400 mr-1 flex-shrink-0" />
+                                <span className="text-[10px] text-slate-400 mr-1">{mainIdx + 1}.{subIdx + 1}</span>
+                                <span title={sub.taskName} className="truncate">{sub.taskName}</span>
+                              </div>
+                              
+                              <div className="flex-1 h-7 relative bg-slate-50/50 rounded border border-slate-100 overflow-hidden">
+                                {/* Baseline Container Bar */}
+                                {sWidth > 0 && (
+                                  <div 
+                                    className="absolute top-1 h-5 rounded bg-blue-100/90 border border-blue-400/80 overflow-hidden flex items-center"
+                                    style={{ left: `${sStart}%`, width: `${sWidth}%` }}
+                                    title={`${lang === 'th' ? 'แผนงาน' : 'Baseline'} ${sub.taskName}: ${format(subDates.start, 'dd/MM/yyyy')} - ${format(subDates.end, 'dd/MM/yyyy')}`}
+                                  >
+                                    {/* Inner Actual Progress Fill inside Baseline when no custom actual date bar */}
+                                    {aWidth === 0 && (sub.progress || 0) > 0 && (
+                                      <div 
+                                        className={`h-full transition-all ${sub.progress === 100 ? 'bg-emerald-500' : 'bg-orange-500'}`}
+                                        style={{ width: `${sub.progress}%` }}
+                                      />
+                                    )}
+                                    <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 whitespace-nowrap z-10">
+                                      {sub.progress}%
+                                    </span>
+                                  </div>
+                                )}
+                                
+                                {/* Actual Dates Bar Overlay if custom actual dates provided */}
+                                {aWidth > 0 && (
+                                  <div 
+                                    className={`absolute top-1.5 h-4 rounded opacity-90 shadow-xs flex items-center px-1 ${sub.progress === 100 ? 'bg-emerald-500 text-white' : 'bg-orange-500 text-white'}`}
+                                    style={{ left: `${aStart}%`, width: `${aWidth}%` }}
+                                    title={`${lang === 'th' ? 'ผลจริง' : 'Actual'} ${sub.taskName}: ${sub.actualStartDate} - ${sub.actualEndDate || 'Ongoing'}`}
+                                  >
+                                    <span className="text-[9px] font-bold truncate">
+                                      {sub.progress}%
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Inline subtask input for Gantt view */}
+                        {showSubInput[main.id] && (
+                          <div className="flex items-center pl-4 py-1 bg-blue-50/60 rounded border border-blue-100 my-1 text-xs">
+                            <div className="w-[214px] flex-shrink-0 flex items-center gap-1 pr-2">
+                              <CornerDownRight className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                              <span className="text-[10px] text-blue-600 font-bold">{mainIdx + 1}.{subScopes.length + 1}</span>
+                            </div>
+                            <div className="flex-1 flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={subTaskInputs[main.id] || ''}
+                                onChange={(e) => setSubTaskInputs({ ...subTaskInputs, [main.id]: e.target.value })}
+                                placeholder={lang === 'th' ? 'กรอกชื่อขอบเขตงานย่อย แล้วกด Enter...' : 'Enter sub-task name...'}
+                                className="flex-1 px-2.5 py-1 text-xs border border-blue-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddSub(main.id)}
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleAddSub(main.id)}
+                                className="px-3 py-1 bg-[#0061FF] text-white rounded text-xs font-semibold hover:bg-blue-700 flex-shrink-0"
+                              >
+                                {lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task'}
+                              </button>
+                              <button
+                                onClick={() => setShowSubInput({ ...showSubInput, [main.id]: false })}
+                                className="px-2 py-1 text-xs text-slate-500 hover:text-slate-700 flex-shrink-0"
+                              >
+                                {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
                 
                 {/* Legend */}
-                <div className="mt-8 flex items-center justify-center gap-6 text-[10px] text-slate-600">
+                <div className="mt-8 flex items-center justify-center gap-6 text-[10px] text-slate-600 border-t pt-4 border-slate-200">
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-3 bg-[#0061FF]/30 border border-[#0061FF]/50 rounded-sm"></div>
+                    <div className="w-4 h-3 bg-blue-100 border border-blue-400 rounded-sm"></div>
                     <span>{lang === 'th' ? 'แผนงาน (Baseline)' : 'Baseline'}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-3 bg-[#FF5E00] rounded-sm"></div>
-                    <span>{lang === 'th' ? 'กำลังดำเนินการ' : 'In Progress'}</span>
+                    <div className="w-4 h-3 bg-orange-500 rounded-sm"></div>
+                    <span>{lang === 'th' ? 'ผลจริง (กำลังดำเนินการ)' : 'Actual (In Progress)'}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-3 bg-[#22C55E] rounded-sm"></div>
-                    <span>{lang === 'th' ? 'เสร็จสมบูรณ์' : 'Completed'}</span>
+                    <div className="w-4 h-3 bg-emerald-500 rounded-sm"></div>
+                    <span>{lang === 'th' ? 'ผลจริง (เสร็จสมบูรณ์)' : 'Actual (Completed)'}</span>
                   </div>
                 </div>
               </div>

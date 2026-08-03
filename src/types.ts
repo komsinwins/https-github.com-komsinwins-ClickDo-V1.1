@@ -127,6 +127,8 @@ export interface Report {
   remarks: string;
   photos: { url: string; caption: string }[];
   signatureUrl?: string;
+  clientSignatureUrl?: string;
+  officerSignatureUrl?: string;
 }
 
 export interface FileAsset {

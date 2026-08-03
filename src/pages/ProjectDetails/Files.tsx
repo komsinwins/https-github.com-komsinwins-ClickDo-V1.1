@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
 import { FileText, Trash2, Download, Upload } from 'lucide-react';
+import { SaveButton } from '../../components/SaveButton';
 
 export function Files({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
@@ -34,16 +35,22 @@ export function Files({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'ไฟล์สำคัญ' : 'Important Files'}</h3>
-        <input type="file" multiple className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors"
-        >
-          <Upload className="w-4 h-4" />
-          {lang === 'th' ? 'อัปโหลดไฟล์' : 'Upload Files'}
-        </button>
+      <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'ไฟล์สำคัญ' : 'Important Files'}</h3>
+          <p className="text-xs text-slate-500">{lang === 'th' ? 'อัปโหลดและจัดเก็บเอกสาร แบบแปลน และไฟล์สำคัญของโครงการ' : 'Upload and organize project documents, drawings, and files.'}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <input type="file" multiple className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors text-xs sm:text-sm"
+          >
+            <Upload className="w-4 h-4" />
+            {lang === 'th' ? 'อัปโหลดไฟล์' : 'Upload Files'}
+          </button>
+          <SaveButton successMessage={lang === 'th' ? 'บันทึกรายการไฟล์เรียบร้อยแล้ว' : 'Files saved successfully'} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">

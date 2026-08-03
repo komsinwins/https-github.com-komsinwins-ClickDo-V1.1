@@ -3,6 +3,8 @@ import { useAppStore } from '../store';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2 } from 'lucide-react';
 
+import { SaveButton } from '../components/SaveButton';
+
 export function MasterData() {
   const { data, updateData } = useAppStore();
   const lang = data.language || 'th';
@@ -119,6 +121,7 @@ export function MasterData() {
           <h2 className="text-3xl font-bold text-slate-800">{lang === 'th' ? 'ข้อมูลหลัก' : 'Master Data'}</h2>
           <p className="text-slate-500 mt-1">{lang === 'th' ? 'จัดการข้อมูลอ้างอิงสำหรับโครงการของคุณ' : 'Manage reference data for your projects.'}</p>
         </div>
+        <SaveButton successMessage={lang === 'th' ? 'บันทึกข้อมูลหลักเรียบร้อยแล้ว' : 'Master data saved successfully'} />
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">

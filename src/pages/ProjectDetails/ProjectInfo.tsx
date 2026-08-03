@@ -1,5 +1,6 @@
 import { useAppStore } from '../../store';
 import { differenceInDays, parseISO } from 'date-fns';
+import { SaveButton } from '../../components/SaveButton';
 
 export function ProjectInfo({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
@@ -34,6 +35,14 @@ export function ProjectInfo({ projectId }: { projectId: string }) {
 
   return (
     <div className="max-w-4xl space-y-4">
+      <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'ข้อมูลทั่วไปของโครงการ' : 'Project Information'}</h3>
+          <p className="text-xs text-slate-500">{lang === 'th' ? 'กรอกข้อมูลและบันทึกรายละเอียดโครงการ' : 'Fill in and save project details.'}</p>
+        </div>
+        <SaveButton successMessage={lang === 'th' ? 'บันทึกข้อมูลโครงการเรียบร้อยแล้ว' : 'Project info saved successfully'} />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         <div className="space-y-1 md:col-span-12">
           <label className="text-xs font-semibold text-slate-700">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</label>

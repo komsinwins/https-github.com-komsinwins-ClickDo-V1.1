@@ -3,6 +3,7 @@ import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Contractor, Installment } from '../../types';
+import { SaveButton } from '../../components/SaveButton';
 
 export function Contractors({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
@@ -74,15 +75,21 @@ export function Contractors({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'จัดการผู้รับเหมา' : 'Contractor Management'}</h3>
-        <button
-          onClick={handleAddContractor}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
-        >
-          <Plus className="w-4 h-4" />
-          {lang === 'th' ? 'เพิ่มผู้รับเหมา' : 'Add Contractor'}
-        </button>
+      <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'จัดการผู้รับเหมา' : 'Contractor Management'}</h3>
+          <p className="text-xs text-slate-500">{lang === 'th' ? 'จัดการข้อมูลผู้รับเหมา ค่าจ้าง และงวดการจ่ายเงิน' : 'Manage contractors, wages, and payment installments.'}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleAddContractor}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium text-xs sm:text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            {lang === 'th' ? 'เพิ่มผู้รับเหมา' : 'Add Contractor'}
+          </button>
+          <SaveButton successMessage={lang === 'th' ? 'บันทึกข้อมูลผู้รับเหมาเรียบร้อยแล้ว' : 'Contractor data saved successfully'} />
+        </div>
       </div>
 
       {projectContractors.length === 0 ? (

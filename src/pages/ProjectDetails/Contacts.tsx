@@ -3,6 +3,7 @@ import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
 import { Plus, Trash2 } from 'lucide-react';
 import { Contact } from '../../types';
+import { SaveButton } from '../../components/SaveButton';
 
 const COMMON_ROLES = ['Project Manager', 'Site Engineer', 'Foreman', 'Safety Officer', 'Client Representative', 'Other'];
 
@@ -35,15 +36,21 @@ export function Contacts({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'ผู้ติดต่อโครงการ' : 'Project Contacts'}</h3>
-        <button
-          onClick={addContact}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          {lang === 'th' ? 'เพิ่มผู้ติดต่อ' : 'Add Contact'}
-        </button>
+      <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'ผู้ติดต่อโครงการ' : 'Project Contacts'}</h3>
+          <p className="text-xs text-slate-500">{lang === 'th' ? 'จัดการรายชื่อ เบอร์โทร และตำแหน่งผู้ติดต่อ' : 'Manage contact names, phones, and roles.'}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={addContact}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium transition-colors text-xs sm:text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            {lang === 'th' ? 'เพิ่มผู้ติดต่อ' : 'Add Contact'}
+          </button>
+          <SaveButton successMessage={lang === 'th' ? 'บันทึกรายชื่อผู้ติดต่อเรียบร้อยแล้ว' : 'Contacts saved successfully'} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
