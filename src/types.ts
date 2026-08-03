@@ -126,6 +126,7 @@ export interface Report {
   nextSteps: string;
   remarks: string;
   photos: { url: string; caption: string }[];
+  signatureUrl?: string;
 }
 
 export interface FileAsset {

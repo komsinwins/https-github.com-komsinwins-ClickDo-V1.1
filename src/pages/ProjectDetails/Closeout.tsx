@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Download, Image as ImageIcon, Trash2, Eraser } from 'lucide-react';
 import { Report } from '../../types';
 import { format, parseISO } from 'date-fns';
+import SignatureCanvas from 'react-signature-canvas';
 
 export function Closeout({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
@@ -23,8 +24,10 @@ export function Closeout({ projectId }: { projectId: string }) {
   const [solutions, setSolutions] = useState(closeoutReport?.solutions || ''); // reusing solutions as "Operations Summary"
   const [remarks, setRemarks] = useState(closeoutReport?.remarks || '');
   const [photos, setPhotos] = useState<{url: string, caption: string}[]>(closeoutReport?.photos || []);
+  const [signatureUrl, setSignatureUrl] = useState<string | undefined>(closeoutReport?.signatureUrl);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const signaturePad = useRef<SignatureCanvas>(null);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -40,6 +43,12 @@ export function Closeout({ projectId }: { projectId: string }) {
   };
 
   const handleSave = () => {
+    let finalSignatureUrl = signatureUrl;
+    if (signaturePad.current && !signaturePad.current.isEmpty()) {
+      finalSignatureUrl = signaturePad.current.getTrimmedCanvas().toDataURL('image/png');
+      setSignatureUrl(finalSignatureUrl); // update state as well
+    }
+
     const reportData: Report = {
       id: closeoutReport?.id || uuidv4(),
       projectId,
@@ -50,7 +59,8 @@ export function Closeout({ projectId }: { projectId: string }) {
       solutions, 
       nextSteps: '',
       remarks,
-      photos
+      photos,
+      signatureUrl: finalSignatureUrl
     };
     
     if (closeoutReport) {
@@ -231,8 +241,41 @@ export function Closeout({ projectId }: { projectId: string }) {
           ))}
         </div>
       </div>
+      
+      <div className="space-y-4 pt-4 border-t border-slate-200">
+        <div className="flex justify-between items-center mb-2">
+          <h4 className="font-medium text-slate-700">{lang === 'th' ? '10. ลายมือชื่อ' : '10. Signature'}</h4>
+          <button 
+            onClick={() => {
+              signaturePad.current?.clear();
+              setSignatureUrl(undefined);
+            }} 
+            className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded hover:bg-slate-200 flex items-center gap-1.5 text-xs font-medium"
+          >
+            <Eraser className="w-3.5 h-3.5" />
+            {lang === 'th' ? 'ล้างลายมือชื่อ' : 'Clear Signature'}
+          </button>
+        </div>
+        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white max-w-md">
+          {signatureUrl && !signaturePad.current?.isEmpty() && false /* logic to hide if we want to show image */ }
+          <SignatureCanvas 
+            ref={signaturePad} 
+            canvasProps={{ className: 'w-full h-40' }}
+            onEnd={() => {
+              if (signaturePad.current) {
+                setSignatureUrl(signaturePad.current.getTrimmedCanvas().toDataURL('image/png'));
+              }
+            }}
+          />
+        </div>
+        {signatureUrl && (
+          <div className="text-xs text-emerald-600 font-medium">
+            {lang === 'th' ? 'บันทึกลายมือชื่อแล้ว (คุณสามารถลบและเซ็นใหม่ได้)' : 'Signature saved (You can clear and re-sign)'}
+          </div>
+        )}
       </div>
 
+      </div>
       {/* Hidden PDF Export Template */}
       <div className="hidden print:block w-full bg-white text-black font-sans">
         
@@ -396,7 +439,17 @@ export function Closeout({ projectId }: { projectId: string }) {
           </div>
         </div>
         
-
+        {/* Signature */}
+        {signatureUrl && (
+          <div className="mb-8 break-inside-avoid flex justify-end mt-12">
+            <div className="text-center">
+              <div className="border-b border-slate-400 mb-2 px-8 min-w-[200px]">
+                <img src={signatureUrl} alt="Signature" className="h-20 object-contain mx-auto mix-blend-multiply" />
+              </div>
+              <p className="text-sm font-medium text-slate-800">{lang === 'th' ? 'ลายมือชื่อผู้ปฏิบัติงาน / ผู้รายงาน' : 'Worker / Reporter Signature'}</p>
+            </div>
+          </div>
+        )}
 
         {/* Section 8: Photos (Appendix) */}
         {photos.length > 0 && (
