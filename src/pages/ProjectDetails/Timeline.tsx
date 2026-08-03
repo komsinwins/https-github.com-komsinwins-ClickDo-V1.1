@@ -1,19 +1,27 @@
 import { useAppStore } from '../../store';
 import { differenceInDays, parseISO, addDays, format, isValid, min, max } from 'date-fns';
-import React, { useState } from 'react';
-import { GripVertical, CornerDownRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { GripVertical, CornerDownRight, ChevronUp, ChevronDown, MoveHorizontal } from 'lucide-react';
 import { SaveButton } from '../../components/SaveButton';
 import { ScopeOfWork as ScopeType } from '../../types';
 
 export function Timeline({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [barDragInfo, setBarDragInfo] = useState<{
+    scopeId: string;
+    startMouseX: number;
+    originalStart: Date;
+    isParent: boolean;
+    deltaDays: number;
+  } | null>(null);
+
   const lang = data.language || 'th';
   
   const project = data.projects.find(p => p.id === projectId);
   const projectScopes = data.scopes
     .filter(s => s.projectId === projectId)
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   if (!project) return null;
 
@@ -91,8 +99,8 @@ export function Timeline({ projectId }: { projectId: string }) {
   minDate = min(validDates);
   maxDate = max(validDates);
 
-  minDate = addDays(minDate, -1);
-  maxDate = addDays(maxDate, 2);
+  minDate = addDays(minDate, -2);
+  maxDate = addDays(maxDate, 3);
   const totalDays = Math.max(1, differenceInDays(maxDate, minDate));
   const dayWidth = 44; // px per day
 
@@ -110,40 +118,6 @@ export function Timeline({ projectId }: { projectId: string }) {
     updateData({
       scopes: data.scopes.map(s => 
         s.id === id ? { ...s, [field]: value } : s
-      )
-    });
-  };
-
-  // Helper to update baseline start date and auto-calculate end date/duration
-  const handleBaselineStartChange = (scope: ScopeType, newStartDateStr: string) => {
-    if (!newStartDateStr) {
-      handleUpdate(scope.id, 'baselineStartDate', '');
-      return;
-    }
-    const newStart = parseISO(newStartDateStr);
-    if (!isValid(newStart)) return;
-
-    let newEndDateStr = scope.baselineEndDate || '';
-    let newDuration = scope.durationDays || 1;
-
-    if (scope.baselineEndDate && isValid(parseISO(scope.baselineEndDate))) {
-      const currentEnd = parseISO(scope.baselineEndDate);
-      if (currentEnd >= newStart) {
-        newDuration = differenceInDays(currentEnd, newStart) + 1;
-      } else {
-        const calculatedEnd = addDays(newStart, newDuration - 1);
-        newEndDateStr = format(calculatedEnd, 'yyyy-MM-dd');
-      }
-    } else {
-      const calculatedEnd = addDays(newStart, newDuration - 1);
-      newEndDateStr = format(calculatedEnd, 'yyyy-MM-dd');
-    }
-
-    updateData({
-      scopes: data.scopes.map(s => 
-        s.id === scope.id 
-          ? { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr, durationDays: newDuration }
-          : s
       )
     });
   };
@@ -204,6 +178,124 @@ export function Timeline({ projectId }: { projectId: string }) {
 
   const overallProgress = calculateOverallProjectProgress();
 
+  // Handle Bar Dragging across timeline
+  const handleBarMouseDown = (e: React.MouseEvent, scope: ScopeType, currentStart: Date, isParent: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setBarDragInfo({
+      scopeId: scope.id,
+      startMouseX: e.clientX,
+      originalStart: currentStart,
+      isParent,
+      deltaDays: 0,
+    });
+  };
+
+  useEffect(() => {
+    if (!barDragInfo) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - barDragInfo.startMouseX;
+      const deltaDays = Math.round(deltaX / dayWidth);
+      setBarDragInfo(prev => prev ? { ...prev, deltaDays } : null);
+    };
+
+    const handleMouseUp = () => {
+      if (barDragInfo.deltaDays !== 0) {
+        const scope = projectScopes.find(s => s.id === barDragInfo.scopeId);
+        if (scope) {
+          const delta = barDragInfo.deltaDays;
+          const subScopes = projectScopes.filter(s => s.parentId === scope.id);
+
+          if (subScopes.length > 0) {
+            // Shift all sub-tasks under this parent
+            const updatedScopes = data.scopes.map(s => {
+              if (s.parentId === scope.id) {
+                const curStart = itemCalculatedDates[s.id]?.start || projectStartDate;
+                const newSubStart = addDays(curStart, delta);
+                const dur = s.durationDays || 1;
+                const newSubEnd = addDays(newSubStart, dur - 1);
+                return {
+                  ...s,
+                  baselineStartDate: format(newSubStart, 'yyyy-MM-dd'),
+                  baselineEndDate: format(newSubEnd, 'yyyy-MM-dd'),
+                };
+              }
+              return s;
+            });
+            updateData({ scopes: updatedScopes });
+          } else {
+            // Shift single scope
+            const curStart = itemCalculatedDates[scope.id]?.start || projectStartDate;
+            const newStart = addDays(curStart, delta);
+            const dur = scope.durationDays || 1;
+            const newEnd = addDays(newStart, dur - 1);
+
+            updateData({
+              scopes: data.scopes.map(s => 
+                s.id === scope.id
+                  ? {
+                      ...s,
+                      baselineStartDate: format(newStart, 'yyyy-MM-dd'),
+                      baselineEndDate: format(newEnd, 'yyyy-MM-dd'),
+                    }
+                  : s
+              )
+            });
+          }
+        }
+      }
+      setBarDragInfo(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [barDragInfo, dayWidth, projectScopes, data.scopes, projectStartDate]);
+
+  // Reorder Tasks Logic
+  const moveTask = (scopeId: string, direction: 'up' | 'down') => {
+    const scope = projectScopes.find(s => s.id === scopeId);
+    if (!scope) return;
+
+    if (!scope.parentId) {
+      const idx = mainScopes.findIndex(s => s.id === scopeId);
+      if (idx === -1) return;
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= mainScopes.length) return;
+
+      const currentItem = mainScopes[idx];
+      const targetItem = mainScopes[targetIdx];
+
+      const updatedScopes = data.scopes.map(s => {
+        if (s.id === currentItem.id) return { ...s, order: targetIdx };
+        if (s.id === targetItem.id) return { ...s, order: idx };
+        return s;
+      });
+      updateData({ scopes: updatedScopes });
+    } else {
+      const siblingSubs = projectScopes.filter(s => s.parentId === scope.parentId);
+      const idx = siblingSubs.findIndex(s => s.id === scopeId);
+      if (idx === -1) return;
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= siblingSubs.length) return;
+
+      const currentItem = siblingSubs[idx];
+      const targetItem = siblingSubs[targetIdx];
+
+      const updatedScopes = data.scopes.map(s => {
+        if (s.id === currentItem.id) return { ...s, order: targetIdx };
+        if (s.id === targetItem.id) return { ...s, order: idx };
+        return s;
+      });
+      updateData({ scopes: updatedScopes });
+    }
+  };
+
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedId(id);
     e.dataTransfer.effectAllowed = 'move';
@@ -217,22 +309,46 @@ export function Timeline({ projectId }: { projectId: string }) {
     e.preventDefault();
     if (!draggedId || draggedId === targetId) return;
 
-    const currentScopes = [...projectScopes];
-    const draggedIdx = currentScopes.findIndex(s => s.id === draggedId);
-    const targetIdx = currentScopes.findIndex(s => s.id === targetId);
-    
-    const [draggedItem] = currentScopes.splice(draggedIdx, 1);
-    currentScopes.splice(targetIdx, 0, draggedItem);
-    
-    const updatedScopes = data.scopes.map(s => {
-      if (s.projectId === projectId) {
-        const newOrder = currentScopes.findIndex(cs => cs.id === s.id);
-        return { ...s, order: newOrder !== -1 ? newOrder : (s.order || 0) };
+    const draggedScope = projectScopes.find(s => s.id === draggedId);
+    const targetScope = projectScopes.find(s => s.id === targetId);
+    if (!draggedScope || !targetScope) return;
+
+    if (!draggedScope.parentId && !targetScope.parentId) {
+      const currentMains = [...mainScopes];
+      const dIdx = currentMains.findIndex(s => s.id === draggedId);
+      const tIdx = currentMains.findIndex(s => s.id === targetId);
+      if (dIdx !== -1 && tIdx !== -1) {
+        const [item] = currentMains.splice(dIdx, 1);
+        currentMains.splice(tIdx, 0, item);
+
+        const updatedScopes = data.scopes.map(s => {
+          if (!s.parentId && s.projectId === projectId) {
+            const newIdx = currentMains.findIndex(m => m.id === s.id);
+            return { ...s, order: newIdx !== -1 ? newIdx : (s.order || 0) };
+          }
+          return s;
+        });
+        updateData({ scopes: updatedScopes });
       }
-      return s;
-    });
-    
-    updateData({ scopes: updatedScopes });
+    } else if (draggedScope.parentId === targetScope.parentId && draggedScope.parentId) {
+      const siblings = projectScopes.filter(s => s.parentId === draggedScope.parentId);
+      const dIdx = siblings.findIndex(s => s.id === draggedId);
+      const tIdx = siblings.findIndex(s => s.id === targetId);
+      if (dIdx !== -1 && tIdx !== -1) {
+        const [item] = siblings.splice(dIdx, 1);
+        siblings.splice(tIdx, 0, item);
+
+        const updatedScopes = data.scopes.map(s => {
+          if (s.parentId === draggedScope.parentId) {
+            const newIdx = siblings.findIndex(sub => sub.id === s.id);
+            return { ...s, order: newIdx !== -1 ? newIdx : (s.order || 0) };
+          }
+          return s;
+        });
+        updateData({ scopes: updatedScopes });
+      }
+    }
+
     setDraggedId(null);
   };
 
@@ -241,12 +357,17 @@ export function Timeline({ projectId }: { projectId: string }) {
   }
 
   // Flatten scopes in order (main task followed by its sub-tasks)
-  const orderedScopes: { scope: ScopeType; isSub: boolean; mainIndex: number; subIndex?: number }[] = [];
+  const orderedScopes: { scope: ScopeType; isSub: boolean; mainIndex: number; subIndex?: number; isFirst: boolean; isLast: boolean }[] = [];
   mainScopes.forEach((main, mIdx) => {
-    orderedScopes.push({ scope: main, isSub: false, mainIndex: mIdx + 1 });
+    const isFirstMain = mIdx === 0;
+    const isLastMain = mIdx === mainScopes.length - 1;
+    orderedScopes.push({ scope: main, isSub: false, mainIndex: mIdx + 1, isFirst: isFirstMain, isLast: isLastMain });
+
     const subScopes = projectScopes.filter(s => s.parentId === main.id);
     subScopes.forEach((sub, sIdx) => {
-      orderedScopes.push({ scope: sub, isSub: true, mainIndex: mIdx + 1, subIndex: sIdx + 1 });
+      const isFirstSub = sIdx === 0;
+      const isLastSub = sIdx === subScopes.length - 1;
+      orderedScopes.push({ scope: sub, isSub: true, mainIndex: mIdx + 1, subIndex: sIdx + 1, isFirst: isFirstSub, isLast: isLastSub });
     });
   });
 
@@ -256,7 +377,7 @@ export function Timeline({ projectId }: { projectId: string }) {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-3">
         <div>
           <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'ตารางเวลาและแผนผังวันดำเนินงาน (Timeline Gantt Chart)' : 'Timeline & Schedule Gantt Chart'}</h3>
-          <p className="text-xs text-slate-500">{lang === 'th' ? 'กำหนดระยะเวลา (วัน) และวันเริ่มทำ เพื่อกำหนดช่วงหมายเลขวันที่ทำบนผัง Gantt' : 'Specify planned duration (days) and start date to position on Gantt chart.'}</p>
+          <p className="text-xs text-slate-500">{lang === 'th' ? 'คุณสามารถสลับลำดับงาน และคลิกลากแถบ Gantt เพื่อปรับเปลี่ยนช่วงวันดำเนินงานได้โดยตรง' : 'Drag Gantt bars left/right to shift schedule dates, or swap tasks using handles and arrows.'}</p>
         </div>
 
         <div className="flex items-center gap-4">
@@ -275,10 +396,9 @@ export function Timeline({ projectId }: { projectId: string }) {
         <div className="inline-block min-w-full">
           {/* Header Row */}
           <div className="flex border-b border-slate-200 bg-[#F1F5F9] sticky top-0 z-10">
-            <div className="w-[380px] flex-shrink-0 flex items-center border-r border-slate-200 sticky left-0 bg-[#F1F5F9] z-20">
-              <div className="w-8"></div>
+            <div className="w-[300px] flex-shrink-0 flex items-center border-r border-slate-200 sticky left-0 bg-[#F1F5F9] z-20">
+              <div className="w-10 text-center font-semibold text-[11px] text-slate-500">{lang === 'th' ? 'สลับ' : 'Order'}</div>
               <div className="flex-1 p-2 font-semibold text-xs text-slate-700">{lang === 'th' ? 'งาน / ขอบเขตงาน' : 'Task / Scope'}</div>
-              <div className="w-24 p-2 font-semibold text-xs text-slate-700 text-center border-l border-slate-200">{lang === 'th' ? 'เริ่มวันที่' : 'Start Date'}</div>
               <div className="w-20 p-2 font-semibold text-xs text-slate-700 text-center border-l border-slate-200">{lang === 'th' ? 'ระยะเวลา (วัน)' : 'Duration'}</div>
             </div>
             <div className="flex relative" style={{ width: `${(totalDays + 1) * dayWidth}px` }}>
@@ -289,14 +409,11 @@ export function Timeline({ projectId }: { projectId: string }) {
                 return (
                   <div 
                     key={i} 
-                    className={`absolute top-0 bottom-0 border-r border-slate-200 text-center font-medium flex flex-col justify-center py-1 ${isProjectDay ? 'bg-blue-50/30' : 'bg-slate-100/50'}`}
+                    className={`absolute top-0 bottom-0 border-r border-slate-200 text-center font-medium flex items-center justify-center py-1 select-none ${isProjectDay ? 'bg-blue-50/30' : 'bg-slate-100/50'}`}
                     style={{ left: `${i * dayWidth}px`, width: `${dayWidth}px`, height: '100%' }}
                   >
                     <div className="text-[10px] font-bold text-[#0061FF]">
-                      {isProjectDay ? `${lang === 'th' ? 'วัน ' : 'Day '}${dayNum}` : `-`}
-                    </div>
-                    <div className="text-[9px] text-slate-500">
-                      {format(day, 'dd/MM')}
+                      {isProjectDay ? `${lang === 'th' ? 'วันที่ ' : 'Day '}${dayNum}` : `-`}
                     </div>
                   </div>
                 );
@@ -305,15 +422,21 @@ export function Timeline({ projectId }: { projectId: string }) {
           </div>
 
           {/* Rows */}
-          {orderedScopes.map(({ scope, isSub, mainIndex, subIndex }) => {
+          {orderedScopes.map(({ scope, isSub, mainIndex, subIndex, isFirst, isLast }) => {
             const calculatedDates = itemCalculatedDates[scope.id] || { start: projectStartDate, end: projectStartDate, duration: 1 };
             const isParent = !isSub && projectScopes.some(s => s.parentId === scope.id);
             const progress = getItemProgress(scope);
             
-            const startDayNum = Math.max(1, differenceInDays(calculatedDates.start, projectStartDate) + 1);
+            const isBeingDragged = barDragInfo?.scopeId === scope.id;
+            const currentDelta = isBeingDragged ? barDragInfo.deltaDays : 0;
+
+            const effectiveStart = addDays(calculatedDates.start, currentDelta);
+            const effectiveEnd = addDays(calculatedDates.end, currentDelta);
+
+            const startDayNum = Math.max(1, differenceInDays(effectiveStart, projectStartDate) + 1);
             const endDayNum = startDayNum + calculatedDates.duration - 1;
 
-            const baselineLeft = differenceInDays(calculatedDates.start, minDate) * dayWidth;
+            const baselineLeft = (differenceInDays(effectiveStart, minDate)) * dayWidth;
             const baselineWidth = calculatedDates.duration * dayWidth;
 
             // Actual calculations
@@ -333,18 +456,39 @@ export function Timeline({ projectId }: { projectId: string }) {
               <div 
                 key={scope.id} 
                 className={`flex border-b border-slate-100 hover:bg-slate-50/80 relative group transition-colors ${isSub ? 'bg-white' : 'bg-slate-50/50 font-semibold'} ${draggedId === scope.id ? 'opacity-50' : ''}`}
-                draggable={!isSub}
+                draggable
                 onDragStart={(e) => handleDragStart(e, scope.id)}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, scope.id)}
               >
                 {/* Left Task Control Column */}
-                <div className="w-[380px] flex-shrink-0 flex items-center border-r border-slate-200 sticky left-0 bg-white group-hover:bg-slate-50 z-20">
-                  <div className="w-8 p-1 flex justify-center cursor-grab active:cursor-grabbing text-slate-400">
-                    <GripVertical className="w-3.5 h-3.5" />
+                <div className="w-[300px] flex-shrink-0 flex items-center border-r border-slate-200 sticky left-0 bg-white group-hover:bg-slate-50 z-20">
+                  {/* Reorder controls (Drag Handle + Up/Down arrows) */}
+                  <div className="w-10 py-1 px-0.5 flex flex-col items-center justify-center border-r border-slate-100 flex-shrink-0">
+                    <div className="flex items-center text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing p-0.5" title={lang === 'th' ? 'คลิกลากเพื่อสลับลำดับงาน' : 'Drag to reorder'}>
+                      <GripVertical className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex items-center gap-0.5 mt-0.5">
+                      <button
+                        onClick={() => moveTask(scope.id, 'up')}
+                        disabled={isFirst}
+                        className="p-0.5 text-slate-400 hover:text-[#0061FF] disabled:opacity-20 disabled:hover:text-slate-400 transition-colors"
+                        title={lang === 'th' ? 'เลื่อนขึ้น' : 'Move Up'}
+                      >
+                        <ChevronUp className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => moveTask(scope.id, 'down')}
+                        disabled={isLast}
+                        className="p-0.5 text-slate-400 hover:text-[#0061FF] disabled:opacity-20 disabled:hover:text-slate-400 transition-colors"
+                        title={lang === 'th' ? 'เลื่อนลง' : 'Move Down'}
+                      >
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className={`flex-1 p-2 text-xs truncate flex items-center gap-1.5 ${isSub ? 'pl-6 text-slate-700' : 'text-slate-900 font-bold'}`}>
+                  <div className={`flex-1 p-2 text-xs truncate flex items-center gap-1.5 ${isSub ? 'pl-4 text-slate-700' : 'text-slate-900 font-bold'}`}>
                     {isSub && <CornerDownRight className="w-3 h-3 text-slate-400 flex-shrink-0" />}
                     <span className="text-slate-500 font-mono text-[10px]">
                       {isSub ? `${mainIndex}.${subIndex}` : `${mainIndex}.`}
@@ -352,22 +496,8 @@ export function Timeline({ projectId }: { projectId: string }) {
                     <span className="truncate" title={scope.taskName}>{scope.taskName}</span>
                   </div>
 
-                  {/* Start Date Column */}
-                  <div className="w-24 p-1 border-l border-slate-200 text-center">
-                    {isParent ? (
-                      <span className="text-[10px] text-slate-600 font-medium">{format(calculatedDates.start, 'dd/MM/yy')}</span>
-                    ) : (
-                      <input
-                        type="date"
-                        value={scope.baselineStartDate || ''}
-                        onChange={(e) => handleBaselineStartChange(scope, e.target.value)}
-                        className="w-full border border-slate-200 rounded p-0.5 text-[10px] text-center focus:border-[#0061FF] focus:outline-none bg-white"
-                      />
-                    )}
-                  </div>
-
                   {/* Duration Column */}
-                  <div className="w-20 p-1 border-l border-slate-200 flex flex-col items-center justify-center">
+                  <div className="w-20 p-1 border-l border-slate-200 flex flex-col items-center justify-center flex-shrink-0">
                     {isParent ? (
                       <span className="text-xs font-bold text-[#0061FF]" title={lang === 'th' ? 'คำนวณจากงานย่อย' : 'Calculated from sub-tasks'}>
                         {calculatedDates.duration} {lang === 'th' ? 'วัน' : 'd'}
@@ -379,7 +509,7 @@ export function Timeline({ projectId }: { projectId: string }) {
                           min="1"
                           value={scope.durationDays || 1}
                           onChange={(e) => handleDurationChange(scope, parseInt(e.target.value) || 1)}
-                          className="w-12 border border-slate-200 rounded focus:border-[#0061FF] focus:outline-none p-0.5 text-xs text-center font-bold"
+                          className="w-12 border border-slate-200 rounded focus:border-[#0061FF] focus:outline-none p-0.5 text-xs text-center font-bold bg-white"
                         />
                         <span className="text-[10px] text-slate-400">{lang === 'th' ? 'วัน' : 'd'}</span>
                       </div>
@@ -402,25 +532,33 @@ export function Timeline({ projectId }: { projectId: string }) {
                     );
                   })}
                   
-                  {/* Baseline Gantt Bar */}
+                  {/* Baseline Gantt Bar (Draggable) */}
                   {baselineWidth > 0 && (
                     <div 
-                      className={`absolute h-6 rounded-md shadow-sm transition-all flex items-center px-2 text-[10px] font-bold text-white overflow-hidden ${
+                      onMouseDown={(e) => handleBarMouseDown(e, scope, calculatedDates.start, isParent)}
+                      className={`absolute h-7 rounded-md shadow-sm transition-shadow flex items-center px-2 text-[10px] font-bold text-white overflow-hidden cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-400 select-none ${
+                        isBeingDragged ? 'ring-2 ring-blue-500 opacity-90 scale-[1.02] z-30 shadow-md' : ''
+                      } ${
                         isParent ? 'bg-indigo-600 border border-indigo-700' : 'bg-[#0061FF]'
                       }`}
                       style={{ left: `${baselineLeft}px`, width: `${baselineWidth}px` }}
-                      title={`${scope.taskName} (${lang === 'th' ? 'วันที่' : 'Days'} ${startDayNum} - ${endDayNum}): ${format(calculatedDates.start, 'dd/MM/yyyy')} - ${format(calculatedDates.end, 'dd/MM/yyyy')}`}
+                      title={lang === 'th' ? 'คลิกลากซ้าย-ขวาเพื่อย้ายวันดำเนินงานบนตาราง' : 'Click & drag left/right to move dates'}
                     >
+                      {/* Drag icon */}
+                      <MoveHorizontal className="w-3 h-3 text-white/80 mr-1 flex-shrink-0" />
+
                       {/* Inner Progress Overlay */}
                       {progress > 0 && (
                         <div 
-                          className="absolute top-0 bottom-0 left-0 bg-emerald-500 opacity-90 transition-all"
+                          className="absolute top-0 bottom-0 left-0 bg-emerald-500 opacity-90 transition-all pointer-events-none"
                           style={{ width: `${progress}%` }}
                         />
                       )}
                       
-                      <span className="relative z-10 truncate drop-shadow-sm">
-                        {baselineWidth >= 60 ? `${lang === 'th' ? 'วัน' : 'Day'} ${startDayNum}-${endDayNum} (${progress}%)` : `${progress}%`}
+                      <span className="relative z-10 truncate drop-shadow-sm pointer-events-none">
+                        {baselineWidth >= 70 
+                          ? `${lang === 'th' ? 'วันที่ ' : 'Day '}${startDayNum}-${endDayNum} (${progress}%)` 
+                          : `${progress}%`}
                       </span>
                     </div>
                   )}
@@ -428,7 +566,7 @@ export function Timeline({ projectId }: { projectId: string }) {
                   {/* Actual Progress Bar (if actual dates entered) */}
                   {actualWidth > 0 && (
                     <div 
-                      className="absolute top-7 h-2 bg-orange-500 rounded-full opacity-80"
+                      className="absolute top-8 h-1.5 bg-orange-500 rounded-full opacity-80 pointer-events-none"
                       style={{ left: `${actualLeft}px`, width: `${actualWidth}px` }}
                       title={`${lang === 'th' ? 'ผลจริง:' : 'Actual:'} ${scope.actualStartDate} - ${scope.actualEndDate || ''}`}
                     />
@@ -442,24 +580,25 @@ export function Timeline({ projectId }: { projectId: string }) {
         {/* Footer Legend */}
         <div className="p-3 flex flex-wrap gap-6 text-xs text-slate-600 bg-slate-50 border-t border-slate-200 mt-2 rounded-b">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-3 bg-[#0061FF] rounded"></div>
-            <span>{lang === 'th' ? 'แผนงาน (Baseline Task)' : 'Baseline Task'}</span>
+            <div className="w-4 h-3 bg-[#0061FF] rounded flex items-center justify-center">
+              <MoveHorizontal className="w-2.5 h-2.5 text-white" />
+            </div>
+            <span>{lang === 'th' ? 'แผนงาน (คลิกลากแถบเพื่อย้ายช่วงวัน)' : 'Baseline Task (Drag bar to shift days)'}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-3 bg-indigo-600 rounded"></div>
-            <span>{lang === 'th' ? 'หมวดงานหลัก (Main Category)' : 'Main Category'}</span>
+            <span>{lang === 'th' ? 'หมวดงานหลัก' : 'Main Category'}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-3 bg-emerald-500 rounded"></div>
             <span>{lang === 'th' ? 'ความคืบหน้า (% Progress)' : '% Progress Fill'}</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-2 bg-orange-500 rounded-full"></div>
-            <span>{lang === 'th' ? 'ผลงานจริง (Actual Duration)' : 'Actual Execution'}</span>
+            <GripVertical className="w-3.5 h-3.5 text-slate-500" />
+            <span>{lang === 'th' ? 'สลับลำดับงาน (ลาก หรือ กดลูกศร ขึ้น-ลง)' : 'Reorder tasks (Drag handle or Up/Down arrows)'}</span>
           </div>
         </div>
       </div>
     </div>
   );
 }
-

@@ -459,8 +459,11 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                 mainScopes.map((main, mainIdx) => {
                   const subScopes = projectScopes.filter(s => s.parentId === main.id);
                   const hasSubs = subScopes.length > 0;
-                  const mainDates = itemCalculatedDates[main.id] || { start: new Date(), end: new Date(), duration: 1 };
+                  const mainDates = itemCalculatedDates[main.id] || { start: projectStartDate, end: projectStartDate, duration: 1 };
                   const computedProgress = getItemProgress(main);
+
+                  const mStartDayNum = Math.max(1, differenceInDays(mainDates.start, projectStartDate) + 1);
+                  const mEndDayNum = Math.max(1, differenceInDays(mainDates.end, projectStartDate) + 1);
 
                   let mainActualDur = 0;
                   if (main.actualStartDate && main.actualEndDate && isValid(parseISO(main.actualStartDate)) && isValid(parseISO(main.actualEndDate))) {
@@ -479,6 +482,15 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                             onChange={(e) => handleUpdate(main.id, 'taskName', e.target.value)}
                             className="w-full border-transparent border-b border-b-slate-300 focus:border-[#0061FF] focus:outline-none p-1 bg-transparent font-bold text-slate-900"
                           />
+                          <div className="text-[10px] text-slate-500 font-normal flex items-center gap-1 mt-0.5 pl-1">
+                            <Clock className="w-3 h-3 text-[#0061FF] flex-shrink-0" />
+                            <span>
+                              {format(mainDates.start, 'dd/MM/yyyy')} - {format(mainDates.end, 'dd/MM/yyyy')}
+                              <span className="text-[#0061FF] font-semibold ml-1">
+                                ({lang === 'th' ? `วันที่ ${mStartDayNum} - ${mEndDayNum}` : `Day ${mStartDayNum} - ${mEndDayNum}`})
+                              </span>
+                            </span>
+                          </div>
                         </td>
 
                         {/* Baseline */}
@@ -500,26 +512,42 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                         </td>
                         <td className="p-2 text-center bg-blue-50/30">
                           {hasSubs ? (
-                            <span className="text-slate-700 font-medium">{format(mainDates.start, 'dd/MM/yyyy')}</span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-slate-800 font-medium">{format(mainDates.start, 'dd/MM/yyyy')}</span>
+                              <span className="text-[10px] text-blue-600 font-semibold">{lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`}</span>
+                            </div>
                           ) : (
-                            <input
-                              type="date"
-                              value={main.baselineStartDate || ''}
-                              onChange={(e) => handleBaselineStartChange(main, e.target.value)}
-                              className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
-                            />
+                            <div className="flex flex-col items-center gap-0.5">
+                              <input
+                                type="date"
+                                value={main.baselineStartDate || format(mainDates.start, 'yyyy-MM-dd')}
+                                onChange={(e) => handleBaselineStartChange(main, e.target.value)}
+                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
+                              />
+                              <span className="text-[10px] text-blue-600 font-semibold">
+                                {format(mainDates.start, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`})
+                              </span>
+                            </div>
                           )}
                         </td>
                         <td className="p-2 text-center bg-blue-50/30 border-r border-slate-200">
                           {hasSubs ? (
-                            <span className="text-slate-700 font-medium">{format(mainDates.end, 'dd/MM/yyyy')}</span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-slate-800 font-medium">{format(mainDates.end, 'dd/MM/yyyy')}</span>
+                              <span className="text-[10px] text-blue-600 font-semibold">{lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`}</span>
+                            </div>
                           ) : (
-                            <input
-                              type="date"
-                              value={main.baselineEndDate || ''}
-                              onChange={(e) => handleBaselineEndChange(main, e.target.value)}
-                              className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
-                            />
+                            <div className="flex flex-col items-center gap-0.5">
+                              <input
+                                type="date"
+                                value={main.baselineEndDate || format(mainDates.end, 'yyyy-MM-dd')}
+                                onChange={(e) => handleBaselineEndChange(main, e.target.value)}
+                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
+                              />
+                              <span className="text-[10px] text-blue-600 font-semibold">
+                                {format(mainDates.end, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`})
+                              </span>
+                            </div>
                           )}
                         </td>
 
@@ -591,6 +619,10 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
                       {/* Sub-Task Rows */}
                       {subScopes.map((sub, subIdx) => {
+                        const subDates = itemCalculatedDates[sub.id] || { start: projectStartDate, end: projectStartDate, duration: 1 };
+                        const sStartDayNum = Math.max(1, differenceInDays(subDates.start, projectStartDate) + 1);
+                        const sEndDayNum = Math.max(1, differenceInDays(subDates.end, projectStartDate) + 1);
+
                         let subActualDur = 0;
                         if (sub.actualStartDate && sub.actualEndDate && isValid(parseISO(sub.actualStartDate)) && isValid(parseISO(sub.actualEndDate))) {
                           subActualDur = differenceInDays(parseISO(sub.actualEndDate), parseISO(sub.actualStartDate)) + 1;
@@ -609,6 +641,14 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                                   className="w-full border-transparent border-b border-b-slate-200 focus:border-[#0061FF] focus:outline-none p-1 bg-transparent text-slate-800"
                                 />
                               </div>
+                              <div className="text-[10px] text-slate-500 font-normal flex items-center gap-1 pl-5 mt-0.5">
+                                <span>
+                                  {format(subDates.start, 'dd/MM/yyyy')} - {format(subDates.end, 'dd/MM/yyyy')}
+                                  <span className="text-[#0061FF] font-semibold ml-1">
+                                    ({lang === 'th' ? `วันที่ ${sStartDayNum} - ${sEndDayNum}` : `Day ${sStartDayNum} - ${sEndDayNum}`})
+                                  </span>
+                                </span>
+                              </div>
                             </td>
 
                             {/* Baseline Sub-task */}
@@ -623,20 +663,30 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                               />
                             </td>
                             <td className="p-2 text-center bg-blue-50/10">
-                              <input
-                                type="date"
-                                value={sub.baselineStartDate || ''}
-                                onChange={(e) => handleBaselineStartChange(sub, e.target.value)}
-                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
-                              />
+                              <div className="flex flex-col items-center gap-0.5">
+                                <input
+                                  type="date"
+                                  value={sub.baselineStartDate || format(subDates.start, 'yyyy-MM-dd')}
+                                  onChange={(e) => handleBaselineStartChange(sub, e.target.value)}
+                                  className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                                />
+                                <span className="text-[10px] text-blue-600 font-medium">
+                                  {format(subDates.start, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sStartDayNum}` : `Day ${sStartDayNum}`})
+                                </span>
+                              </div>
                             </td>
                             <td className="p-2 text-center bg-blue-50/10 border-r border-slate-200">
-                              <input
-                                type="date"
-                                value={sub.baselineEndDate || ''}
-                                onChange={(e) => handleBaselineEndChange(sub, e.target.value)}
-                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
-                              />
+                              <div className="flex flex-col items-center gap-0.5">
+                                <input
+                                  type="date"
+                                  value={sub.baselineEndDate || format(subDates.end, 'yyyy-MM-dd')}
+                                  onChange={(e) => handleBaselineEndChange(sub, e.target.value)}
+                                  className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                                />
+                                <span className="text-[10px] text-blue-600 font-medium">
+                                  {format(subDates.end, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sEndDayNum}` : `Day ${sEndDayNum}`})
+                                </span>
+                              </div>
                             </td>
 
                             {/* Actual Sub-task */}
