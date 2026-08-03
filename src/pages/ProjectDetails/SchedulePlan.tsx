@@ -69,6 +69,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
   const validDates: Date[] = [minDate, maxDate];
   projectScopes.forEach(s => {
+    if (s.baselineStartDate && isValid(parseISO(s.baselineStartDate))) validDates.push(parseISO(s.baselineStartDate));
+    if (s.baselineEndDate && isValid(parseISO(s.baselineEndDate))) validDates.push(parseISO(s.baselineEndDate));
     if (s.actualStartDate && isValid(parseISO(s.actualStartDate))) validDates.push(parseISO(s.actualStartDate));
     if (s.actualEndDate && isValid(parseISO(s.actualEndDate))) validDates.push(parseISO(s.actualEndDate));
   });
@@ -87,6 +89,127 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       )
     });
   };
+
+  // Helper to update baseline start date and auto-calculate duration / end date
+  const handleBaselineStartChange = (scope: ScopeType, newStartDateStr: string) => {
+    if (!newStartDateStr) {
+      handleUpdate(scope.id, 'baselineStartDate', '');
+      return;
+    }
+    const newStart = parseISO(newStartDateStr);
+    if (!isValid(newStart)) return;
+
+    let newEndDateStr = scope.baselineEndDate || '';
+    let newDuration = scope.durationDays || 1;
+
+    if (scope.baselineEndDate && isValid(parseISO(scope.baselineEndDate))) {
+      const currentEnd = parseISO(scope.baselineEndDate);
+      if (currentEnd >= newStart) {
+        newDuration = differenceInDays(currentEnd, newStart) + 1;
+      } else {
+        const calculatedEnd = addDays(newStart, newDuration - 1);
+        newEndDateStr = format(calculatedEnd, 'yyyy-MM-dd');
+      }
+    } else {
+      const calculatedEnd = addDays(newStart, newDuration - 1);
+      newEndDateStr = format(calculatedEnd, 'yyyy-MM-dd');
+    }
+
+    updateData({
+      scopes: data.scopes.map(s => 
+        s.id === scope.id 
+          ? { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr, durationDays: newDuration }
+          : s
+      )
+    });
+  };
+
+  // Helper to update baseline end date and auto-calculate duration
+  const handleBaselineEndChange = (scope: ScopeType, newEndDateStr: string) => {
+    if (!newEndDateStr) {
+      handleUpdate(scope.id, 'baselineEndDate', '');
+      return;
+    }
+    const newEnd = parseISO(newEndDateStr);
+    if (!isValid(newEnd)) return;
+
+    let newStartDateStr = scope.baselineStartDate || format(projectStartDate, 'yyyy-MM-dd');
+    let start = parseISO(newStartDateStr);
+    if (!isValid(start)) start = projectStartDate;
+
+    let newDuration = scope.durationDays || 1;
+    if (newEnd >= start) {
+      newDuration = differenceInDays(newEnd, start) + 1;
+    } else {
+      newStartDateStr = format(newEnd, 'yyyy-MM-dd');
+      newDuration = 1;
+    }
+
+    updateData({
+      scopes: data.scopes.map(s => 
+        s.id === scope.id 
+          ? { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr, durationDays: newDuration }
+          : s
+      )
+    });
+  };
+
+  // Helper to update duration and auto-calculate baseline end date
+  const handleDurationChange = (scope: ScopeType, newDuration: number) => {
+    const dur = Math.max(1, newDuration);
+    let newEndDateStr = scope.baselineEndDate || '';
+
+    if (scope.baselineStartDate && isValid(parseISO(scope.baselineStartDate))) {
+      const start = parseISO(scope.baselineStartDate);
+      const calculatedEnd = addDays(start, dur - 1);
+      newEndDateStr = format(calculatedEnd, 'yyyy-MM-dd');
+    }
+
+    updateData({
+      scopes: data.scopes.map(s => 
+        s.id === scope.id 
+          ? { ...s, durationDays: dur, baselineEndDate: newEndDateStr }
+          : s
+      )
+    });
+  };
+
+  // Calculate progress for a task (auto-calculates parent progress if subtasks exist)
+  const getItemProgress = (scope: ScopeType): number => {
+    const subScopes = projectScopes.filter(s => s.parentId === scope.id);
+    if (subScopes.length === 0) {
+      return scope.progress || 0;
+    }
+    const totalSubDur = subScopes.reduce((sum, sub) => sum + (sub.durationDays || 1), 0);
+    if (totalSubDur > 0) {
+      const weightedSum = subScopes.reduce((sum, sub) => sum + ((sub.progress || 0) * (sub.durationDays || 1)), 0);
+      return Math.round(weightedSum / totalSubDur);
+    }
+    const totalProg = subScopes.reduce((sum, sub) => sum + (sub.progress || 0), 0);
+    return Math.round(totalProg / subScopes.length);
+  };
+
+  // Calculate overall project progress %
+  const calculateOverallProjectProgress = (): number => {
+    if (mainScopes.length === 0) return 0;
+    let totalWeightedProg = 0;
+    let totalDur = 0;
+
+    mainScopes.forEach(main => {
+      const prog = getItemProgress(main);
+      const subScopes = projectScopes.filter(s => s.parentId === main.id);
+      const dur = subScopes.length > 0 
+        ? subScopes.reduce((sum, s) => sum + (s.durationDays || 1), 0)
+        : (main.durationDays || 1);
+
+      totalWeightedProg += prog * dur;
+      totalDur += dur;
+    });
+
+    return totalDur > 0 ? Math.round(totalWeightedProg / totalDur) : 0;
+  };
+
+  const overallProgress = calculateOverallProjectProgress();
 
   const [taskType, setTaskType] = useState<'main' | 'sub'>('main');
   const [selectedParentId, setSelectedParentId] = useState<string>('');
@@ -281,9 +404,25 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       </div>
 
       <div className="overflow-x-auto border border-slate-200 rounded-lg bg-white p-4 shadow-sm" ref={reportRef}>
-        <div className="mb-4 text-center border-b pb-3 border-slate-200">
-          <h3 className="text-xl font-bold text-slate-800">{lang === 'th' ? 'ตารางประเมินและประเมินระยะเวลาการทำงาน (Schedule Plan)' : 'Schedule & Duration Estimation Plan'}</h3>
-          <p className="text-xs text-slate-500 mt-1">{project.name} | {lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start Date:'} {format(projectStartDate, 'dd/MM/yyyy')}</p>
+        <div className="mb-4 pb-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="text-center md:text-left">
+            <h3 className="text-xl font-bold text-slate-800">{lang === 'th' ? 'ตารางประเมินและประเมินระยะเวลาการทำงาน (Schedule Plan)' : 'Schedule & Duration Estimation Plan'}</h3>
+            <p className="text-xs text-slate-500 mt-1">{project.name} | {lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start Date:'} {format(projectStartDate, 'dd/MM/yyyy')}</p>
+          </div>
+
+          {/* Overall Project Progress Banner */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-lg p-3 min-w-[240px]">
+            <div className="flex justify-between items-center text-xs font-semibold text-slate-700 mb-1.5">
+              <span>{lang === 'th' ? 'ความคืบหน้ารวมของโครงการ:' : 'Overall Project Progress:'}</span>
+              <span className="text-[#0061FF] font-bold text-sm">{overallProgress}%</span>
+            </div>
+            <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-300 ${overallProgress === 100 ? 'bg-emerald-500' : 'bg-[#0061FF]'}`}
+                style={{ width: `${overallProgress}%` }}
+              />
+            </div>
+          </div>
         </div>
         
         {view === 'table' ? (
@@ -299,7 +438,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
               </tr>
               <tr className="bg-slate-100 border-b border-slate-200 text-[10px] text-slate-600">
                 <th className="p-1.5 border-r border-slate-200" colSpan={2}></th>
-                <th className="p-1.5 text-center bg-blue-50/50">{lang === 'th' ? 'จำนวนวัน' : 'Days'}</th>
+                <th className="p-1.5 text-center bg-blue-50/50 w-20">{lang === 'th' ? 'ระยะเวลา (วัน)' : 'Duration (Days)'}</th>
                 <th className="p-1.5 text-center bg-blue-50/50">{lang === 'th' ? 'เริ่ม' : 'Start'}</th>
                 <th className="p-1.5 text-center bg-blue-50/50 border-r border-slate-200">{lang === 'th' ? 'สิ้นสุด' : 'End'}</th>
                 <th className="p-1.5 text-center bg-orange-50/50">{lang === 'th' ? 'เริ่ม' : 'Start'}</th>
@@ -321,6 +460,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                   const subScopes = projectScopes.filter(s => s.parentId === main.id);
                   const hasSubs = subScopes.length > 0;
                   const mainDates = itemCalculatedDates[main.id] || { start: new Date(), end: new Date(), duration: 1 };
+                  const computedProgress = getItemProgress(main);
 
                   let mainActualDur = 0;
                   if (main.actualStartDate && main.actualEndDate && isValid(parseISO(main.actualStartDate)) && isValid(parseISO(main.actualEndDate))) {
@@ -344,19 +484,44 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                         {/* Baseline */}
                         <td className="p-2 text-center bg-blue-50/30">
                           {hasSubs ? (
-                            <span className="font-bold text-[#0061FF]">{mainDates.duration} {lang === 'th' ? 'วัน' : 'days'}</span>
+                            <span className="font-bold text-[#0061FF]" title={lang === 'th' ? 'คำนวณจากงานย่อย' : 'Calculated from sub-tasks'}>
+                              {mainDates.duration} {lang === 'th' ? 'วัน' : 'days'}
+                            </span>
                           ) : (
                             <input
                               type="number"
                               min="1"
                               value={main.durationDays || 1}
-                              onChange={(e) => handleUpdate(main.id, 'durationDays', parseInt(e.target.value) || 1)}
+                              onChange={(e) => handleDurationChange(main, parseInt(e.target.value) || 1)}
                               className="w-14 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white font-bold"
+                              title={lang === 'th' ? 'กำหนดระยะเวลา (คำนวณวันสิ้นสุดให้อัตโนมัติ)' : 'Set duration (auto calculates end date)'}
                             />
                           )}
                         </td>
-                        <td className="p-2 text-center text-slate-700 bg-blue-50/30 font-medium">{format(mainDates.start, 'dd/MM/yyyy')}</td>
-                        <td className="p-2 text-center text-slate-700 bg-blue-50/30 border-r border-slate-200 font-medium">{format(mainDates.end, 'dd/MM/yyyy')}</td>
+                        <td className="p-2 text-center bg-blue-50/30">
+                          {hasSubs ? (
+                            <span className="text-slate-700 font-medium">{format(mainDates.start, 'dd/MM/yyyy')}</span>
+                          ) : (
+                            <input
+                              type="date"
+                              value={main.baselineStartDate || ''}
+                              onChange={(e) => handleBaselineStartChange(main, e.target.value)}
+                              className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
+                            />
+                          )}
+                        </td>
+                        <td className="p-2 text-center bg-blue-50/30 border-r border-slate-200">
+                          {hasSubs ? (
+                            <span className="text-slate-700 font-medium">{format(mainDates.end, 'dd/MM/yyyy')}</span>
+                          ) : (
+                            <input
+                              type="date"
+                              value={main.baselineEndDate || ''}
+                              onChange={(e) => handleBaselineEndChange(main, e.target.value)}
+                              className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
+                            />
+                          )}
+                        </td>
 
                         {/* Actual */}
                         <td className="p-2 text-center bg-orange-50/20">
@@ -381,17 +546,25 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
                         {/* Progress */}
                         <td className="p-2 text-center border-r border-slate-200">
-                          <div className="flex items-center justify-center gap-1">
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              value={main.progress}
-                              onChange={(e) => handleUpdate(main.id, 'progress', parseInt(e.target.value) || 0)}
-                              className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white font-bold text-[#FF5E00]"
-                            />
-                            <span className="text-slate-500">%</span>
-                          </div>
+                          {hasSubs ? (
+                            <div className="flex items-center justify-center gap-1" title={lang === 'th' ? 'คำนวณอัตโนมัติจากงานย่อย' : 'Calculated automatically from sub-tasks'}>
+                              <span className="px-2 py-1 bg-blue-50 text-[#0061FF] rounded font-bold text-xs border border-blue-200">
+                                {computedProgress}%
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={main.progress || 0}
+                                onChange={(e) => handleUpdate(main.id, 'progress', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                                className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white font-bold text-[#FF5E00]"
+                              />
+                              <span className="text-slate-500">%</span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Actions */}
@@ -418,7 +591,6 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
                       {/* Sub-Task Rows */}
                       {subScopes.map((sub, subIdx) => {
-                        const subDates = itemCalculatedDates[sub.id] || { start: new Date(), end: new Date(), duration: 1 };
                         let subActualDur = 0;
                         if (sub.actualStartDate && sub.actualEndDate && isValid(parseISO(sub.actualStartDate)) && isValid(parseISO(sub.actualEndDate))) {
                           subActualDur = differenceInDays(parseISO(sub.actualEndDate), parseISO(sub.actualStartDate)) + 1;
@@ -439,20 +611,35 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                               </div>
                             </td>
 
-                            {/* Baseline */}
+                            {/* Baseline Sub-task */}
                             <td className="p-2 text-center bg-blue-50/10">
                               <input
                                 type="number"
                                 min="1"
                                 value={sub.durationDays || 1}
-                                onChange={(e) => handleUpdate(sub.id, 'durationDays', parseInt(e.target.value) || 1)}
+                                onChange={(e) => handleDurationChange(sub, parseInt(e.target.value) || 1)}
                                 className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs"
+                                title={lang === 'th' ? 'กำหนดระยะเวลา (วัน)' : 'Set duration'}
                               />
                             </td>
-                            <td className="p-2 text-center text-slate-600 bg-blue-50/10">{format(subDates.start, 'dd/MM/yyyy')}</td>
-                            <td className="p-2 text-center text-slate-600 bg-blue-50/10 border-r border-slate-200">{format(subDates.end, 'dd/MM/yyyy')}</td>
+                            <td className="p-2 text-center bg-blue-50/10">
+                              <input
+                                type="date"
+                                value={sub.baselineStartDate || ''}
+                                onChange={(e) => handleBaselineStartChange(sub, e.target.value)}
+                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                              />
+                            </td>
+                            <td className="p-2 text-center bg-blue-50/10 border-r border-slate-200">
+                              <input
+                                type="date"
+                                value={sub.baselineEndDate || ''}
+                                onChange={(e) => handleBaselineEndChange(sub, e.target.value)}
+                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                              />
+                            </td>
 
-                            {/* Actual */}
+                            {/* Actual Sub-task */}
                             <td className="p-2 text-center bg-orange-50/10">
                               <input
                                 type="date"
@@ -473,15 +660,15 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                               {subActualDur > 0 ? `${subActualDur}` : '-'}
                             </td>
 
-                            {/* Progress */}
+                            {/* Progress Sub-task */}
                             <td className="p-2 text-center border-r border-slate-200">
                               <div className="flex items-center justify-center gap-1">
                                 <input
                                   type="number"
                                   min="0"
                                   max="100"
-                                  value={sub.progress}
-                                  onChange={(e) => handleUpdate(sub.id, 'progress', parseInt(e.target.value) || 0)}
+                                  value={sub.progress || 0}
+                                  onChange={(e) => handleUpdate(sub.id, 'progress', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                                   className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs font-semibold text-[#FF5E00]"
                                 />
                                 <span className="text-slate-400 text-[10px]">%</span>
