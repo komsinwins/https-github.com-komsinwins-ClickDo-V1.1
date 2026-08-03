@@ -106,13 +106,6 @@ export function Closeout({ projectId }: { projectId: string }) {
           <div><span className="font-medium text-slate-600">{lang === 'th' ? 'วันที่สิ้นสุด (แผนงาน):' : 'Planned End Date:'}</span> <span className="text-slate-800">{formatDate(project?.endDate)}</span></div>
           <div><span className="font-medium text-slate-600">{lang === 'th' ? 'วันที่สิ้นสุดการดำเนินงาน:' : 'Actual End Date:'}</span> <span className="text-slate-800">{formatDate(project?.actualCompletionDate)}</span></div>
         </div>
-
-        {project?.projectDetails && (
-          <div className="mt-4">
-            <span className="font-medium text-slate-600 mb-1 block">{lang === 'th' ? 'รายละเอียดเพิ่มเติม:' : 'Additional Details:'}</span>
-            <p className="text-slate-800 text-sm bg-white p-3 border border-slate-200 rounded whitespace-pre-wrap">{project.projectDetails}</p>
-          </div>
-        )}
       </div>
 
       <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
@@ -150,7 +143,12 @@ export function Closeout({ projectId }: { projectId: string }) {
       </div>
 
       <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
-        <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-200">{lang === 'th' ? '4. ขอบเขตงานและขั้นตอนการทำงาน' : '4. Scope of Work & Schedule'}</h4>
+        <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-200">{lang === 'th' ? '4. รายละเอียดโครงการ' : '4. Project Details'}</h4>
+        <p className="text-slate-800 text-sm bg-white p-4 border border-slate-200 rounded-lg whitespace-pre-wrap min-h-[100px]">{project?.projectDetails || (lang === 'th' ? 'ไม่มีรายละเอียดโครงการ' : 'No project details available.')}</p>
+      </div>
+
+      <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+        <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-200">{lang === 'th' ? '5. ขอบเขตงานและขั้นตอนการทำงาน' : '5. Scope of Work & Schedule'}</h4>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm border-collapse bg-white border border-slate-200 rounded">
             <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200">
@@ -191,22 +189,22 @@ export function Closeout({ projectId }: { projectId: string }) {
 
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-medium text-slate-700">{lang === 'th' ? '5. ปัญหาและอุปสรรค' : '5. Problems & Obstacles'}</label>
+          <label className="text-sm font-medium text-slate-700">{lang === 'th' ? '6. ปัญหาและอุปสรรค' : '6. Problems & Obstacles'}</label>
           <textarea rows={3} value={problems} onChange={e => setProblems(e.target.value)} className="w-full mt-1 p-3 border border-slate-300 rounded-lg resize-none" placeholder={lang === 'th' ? 'อธิบายปัญหาที่พบ...' : 'Describe any problems encountered...'}/>
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700">{lang === 'th' ? '6. สรุปผลการดำเนินงาน' : '6. Operations Summary'}</label>
+          <label className="text-sm font-medium text-slate-700">{lang === 'th' ? '7. สรุปผลการดำเนินงาน' : '7. Operations Summary'}</label>
           <textarea rows={3} value={solutions} onChange={e => setSolutions(e.target.value)} className="w-full mt-1 p-3 border border-slate-300 rounded-lg resize-none" placeholder={lang === 'th' ? 'สรุปผลการดำเนินงานโดยรวม...' : 'Summarize the overall operations...'}/>
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700">{lang === 'th' ? '7. หมายเหตุ' : '7. Notes'}</label>
+          <label className="text-sm font-medium text-slate-700">{lang === 'th' ? '8. หมายเหตุ' : '8. Notes'}</label>
           <textarea rows={3} value={remarks} onChange={e => setRemarks(e.target.value)} className="w-full mt-1 p-3 border border-slate-300 rounded-lg resize-none" placeholder={lang === 'th' ? 'หมายเหตุเพิ่มเติม...' : 'Additional notes...'}/>
         </div>
       </div>
 
       <div className="space-y-4 pt-4 border-t border-slate-200">
         <div className="flex justify-between items-center">
-          <h4 className="font-medium text-slate-700">{lang === 'th' ? '8. รูปภาพประกอบ (สูงสุด 6 รูปต่อหน้าใน PDF)' : '8. Photos (Max 6 per page in PDF)'}</h4>
+          <h4 className="font-medium text-slate-700">{lang === 'th' ? '9. รูปภาพประกอบ (สูงสุด 6 รูปต่อหน้าใน PDF)' : '9. Photos (Max 6 per page in PDF)'}</h4>
           <input type="file" multiple accept="image/*" className="hidden" ref={fileInputRef} onChange={handlePhotoUpload} />
           <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 flex items-center gap-2 text-sm">
             <ImageIcon className="w-4 h-4" /> {lang === 'th' ? 'เพิ่มรูปภาพ' : 'Add Photos'}
@@ -345,9 +343,17 @@ export function Closeout({ projectId }: { projectId: string }) {
           </div>
         </div>
 
-        {/* Section 4: Scopes */}
+        {/* Section 4: Project Details */}
         <div className="mb-8 break-inside-avoid">
-           <h2 className="text-lg font-bold bg-slate-800 text-white p-2 px-4 mb-4 rounded-t">4. {lang === 'th' ? 'ขอบเขตงานและขั้นตอนการทำงาน' : 'Scope of Work & Schedule'}</h2>
+           <h2 className="text-lg font-bold bg-slate-800 text-white p-2 px-4 mb-4 rounded-t">4. {lang === 'th' ? 'รายละเอียดโครงการ' : 'Project Details'}</h2>
+           <div className="border-2 border-slate-800 rounded-b p-5 -mt-4 bg-white">
+             <p className="text-sm whitespace-pre-wrap text-slate-700">{project?.projectDetails || '-'}</p>
+           </div>
+        </div>
+
+        {/* Section 5: Scopes */}
+        <div className="mb-8 break-inside-avoid">
+           <h2 className="text-lg font-bold bg-slate-800 text-white p-2 px-4 mb-4 rounded-t">5. {lang === 'th' ? 'ขอบเขตงานและขั้นตอนการทำงาน' : 'Scope of Work & Schedule'}</h2>
            <div className="border-2 border-slate-800 rounded-b overflow-hidden -mt-4 bg-white">
              <table className="w-full text-sm text-left">
                <thead className="bg-slate-100 border-b-2 border-slate-800">
@@ -374,18 +380,18 @@ export function Closeout({ projectId }: { projectId: string }) {
            </div>
         </div>
 
-        {/* Sections 5, 6, 7 */}
+        {/* Sections 6, 7, 8 */}
         <div className="mb-8 grid grid-cols-1 gap-6 break-inside-avoid">
           <div className="border-2 border-slate-800 rounded-lg p-5 bg-white relative mt-3">
-            <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">5. {lang === 'th' ? 'ปัญหาและอุปสรรค' : 'Problems & Obstacles'}</h2>
+            <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">6. {lang === 'th' ? 'ปัญหาและอุปสรรค' : 'Problems & Obstacles'}</h2>
             <p className="text-sm whitespace-pre-wrap text-slate-700">{problems || '-'}</p>
           </div>
           <div className="border-2 border-slate-800 rounded-lg p-5 bg-white relative mt-3">
-            <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">6. {lang === 'th' ? 'สรุปผลการดำเนินงาน' : 'Operations Summary'}</h2>
+            <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">7. {lang === 'th' ? 'สรุปผลการดำเนินงาน' : 'Operations Summary'}</h2>
             <p className="text-sm whitespace-pre-wrap text-slate-700">{solutions || '-'}</p>
           </div>
           <div className="border-2 border-slate-800 rounded-lg p-5 bg-white relative mt-3">
-            <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">7. {lang === 'th' ? 'หมายเหตุ' : 'Notes'}</h2>
+            <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">8. {lang === 'th' ? 'หมายเหตุ' : 'Notes'}</h2>
             <p className="text-sm whitespace-pre-wrap text-slate-700">{remarks || '-'}</p>
           </div>
         </div>
