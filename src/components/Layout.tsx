@@ -6,6 +6,7 @@ import {
   Settings,
   Bell,
   Menu,
+  X,
   Globe,
   Download,
   Upload,
@@ -17,9 +18,10 @@ import { differenceInDays, parseISO } from 'date-fns';
 interface SidebarProps {
   currentRoute: string;
   navigate: (route: string) => void;
+  onItemClick?: () => void;
 }
 
-export function Sidebar({ currentRoute, navigate }: SidebarProps) {
+export function Sidebar({ currentRoute, navigate, onItemClick }: SidebarProps) {
   const { data } = useAppStore();
   const lang = data.language || 'th';
 
@@ -30,13 +32,29 @@ export function Sidebar({ currentRoute, navigate }: SidebarProps) {
     { id: 'project-summary', label: lang === 'th' ? 'สรุปปริมาณโครงการ' : 'Project Summary', icon: BarChart2 },
   ];
 
+  const handleSelect = (id: string) => {
+    navigate(id);
+    if (onItemClick) onItemClick();
+  };
+
   return (
-    <div className="w-[220px] bg-slate-800 text-white h-screen flex flex-col shrink-0">
-      <div className="p-6 border-b border-white/10">
-        <div className="text-2xl font-extrabold tracking-tighter text-white flex items-baseline">
-          ClickDo<span className="text-xs opacity-60 ml-1">V1.1</span>
+    <div className="w-[220px] bg-slate-800 text-white h-full flex flex-col shrink-0">
+      <div className="p-5 border-b border-white/10 flex items-center justify-between">
+        <div>
+          <div className="text-2xl font-extrabold tracking-tighter text-white flex items-baseline">
+            ClickDo<span className="text-xs opacity-60 ml-1">V1.1</span>
+          </div>
+          <p className="text-[10px] italic text-[#FF5E00] mt-0.5">"Click to Plan, Do to Win"</p>
         </div>
-        <p className="text-[10px] italic text-[#FF5E00] mt-1">"Click to Plan, Do to Win"</p>
+        {onItemClick && (
+          <button
+            onClick={onItemClick}
+            className="md:hidden p-1.5 rounded-md text-slate-300 hover:text-white hover:bg-white/10"
+            aria-label="Close menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
       <nav className="flex-1 py-4">
         {menuItems.map((item) => {
@@ -45,27 +63,27 @@ export function Sidebar({ currentRoute, navigate }: SidebarProps) {
           return (
             <button
               key={item.id}
-              onClick={() => navigate(item.id)}
-              className={`w-full flex items-center gap-3 px-6 py-2.5 text-[13px] transition-all ${
+              onClick={() => handleSelect(item.id)}
+              className={`w-full flex items-center gap-3 px-6 py-3 text-[13px] font-medium transition-all ${
                 isActive
-                  ? 'bg-white/10 border-l-4 border-[#FF5E00] opacity-100'
-                  : 'opacity-70 hover:opacity-100 hover:bg-white/5 border-l-4 border-transparent'
+                  ? 'bg-white/10 border-l-4 border-[#FF5E00] text-white'
+                  : 'opacity-70 hover:opacity-100 hover:bg-white/5 border-l-4 border-transparent text-slate-200'
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="w-4.5 h-4.5 shrink-0" />
               <span>{item.label}</span>
             </button>
           );
         })}
       </nav>
-      <div className="p-6 border-t border-white/10">
-        <div className="text-[13px] font-bold text-center">WIN SECURITY SERVICE COMPANY LIMITED</div>
+      <div className="p-4 border-t border-white/10 text-center">
+        <div className="text-[11px] font-bold text-slate-300">WIN SECURITY SERVICE COMPANY LIMITED</div>
       </div>
     </div>
   );
 }
 
-export function Header() {
+export function Header({ onToggleMobileMenu }: { onToggleMobileMenu?: () => void }) {
   const { data, updateData } = useAppStore();
   const today = new Date();
   const lang = data.language || 'th';
@@ -106,11 +124,23 @@ export function Header() {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0">
-      <h2 className="text-lg font-semibold text-slate-800">
-        {lang === 'th' ? 'การจัดการโครงการ' : 'Project Management'}
-      </h2>
-      <div className="flex items-center gap-4">
+    <header className="h-16 bg-white border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between shrink-0">
+      <div className="flex items-center gap-2">
+        {/* Mobile Hamburger Toggle */}
+        <button
+          onClick={onToggleMobileMenu}
+          className="md:hidden p-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+          aria-label="Toggle navigation menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <h2 className="text-base sm:text-lg font-bold text-slate-800 truncate max-w-[160px] sm:max-w-none">
+          {lang === 'th' ? 'การจัดการโครงการ' : 'Project Management'}
+        </h2>
+      </div>
+
+      <div className="flex items-center gap-2 sm:gap-4">
         <input 
           type="file" 
           accept=".json" 
@@ -118,36 +148,38 @@ export function Header() {
           style={{ display: 'none' }}
           onChange={importData}
         />
-        <div className="flex items-center gap-2 mr-2 border-r border-slate-200 pr-4">
+        <div className="flex items-center gap-1.5 sm:gap-2 border-r border-slate-200 pr-2 sm:pr-4">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 p-1.5 px-3 bg-slate-50 text-slate-600 rounded-md hover:bg-slate-100 transition-colors text-sm font-medium border border-slate-200"
+            className="flex items-center gap-1 p-1.5 sm:px-3 bg-slate-50 text-slate-600 rounded-md hover:bg-slate-100 transition-colors text-xs sm:text-sm font-medium border border-slate-200"
             title={lang === 'th' ? 'นำเข้าข้อมูล' : 'Import Backup'}
           >
             <Upload className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">{lang === 'th' ? 'นำเข้า' : 'Import'}</span>
           </button>
           <button
             onClick={exportData}
-            className="flex items-center gap-1.5 p-1.5 px-3 bg-slate-50 text-slate-600 rounded-md hover:bg-slate-100 transition-colors text-sm font-medium border border-slate-200"
+            className="flex items-center gap-1 p-1.5 sm:px-3 bg-slate-50 text-slate-600 rounded-md hover:bg-slate-100 transition-colors text-xs sm:text-sm font-medium border border-slate-200"
             title={lang === 'th' ? 'สำรองข้อมูล' : 'Export Backup'}
           >
             <Download className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">{lang === 'th' ? 'สำรองข้อมูล' : 'Export'}</span>
           </button>
         </div>
 
         <button
           onClick={() => updateData({ language: lang === 'th' ? 'en' : 'th' })}
-          className="flex items-center gap-2 p-1.5 px-3 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors text-sm font-medium"
+          className="flex items-center gap-1.5 p-1.5 px-2 sm:px-3 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 transition-colors text-xs sm:text-sm font-semibold"
         >
-          <Globe className="w-4 h-4" />
-          {lang === 'th' ? 'EN' : 'TH'}
+          <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
+          <span>{lang === 'th' ? 'EN' : 'TH'}</span>
         </button>
 
         <div className="relative group cursor-pointer flex items-center">
           {endingSoon.length > 0 && (
-            <div className="mr-5 text-xs text-red-500 flex items-center">
-              ⚠️ {lang === 'th' ? 'ใกล้ครบกำหนดใน 7 วัน' : 'Ending within 7 days'} 
-              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-2 font-bold">{endingSoon.length}</span>
+            <div className="mr-2 sm:mr-4 text-xs text-red-500 font-semibold flex items-center">
+              <span className="hidden sm:inline mr-1">⚠️ {lang === 'th' ? 'ใกล้ครบกำหนด' : 'Ending soon'}</span>
+              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">{endingSoon.length}</span>
             </div>
           )}
           <div className="p-1.5 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors">
@@ -175,16 +207,40 @@ export function Header() {
 }
 
 export function Layout({ children, currentRoute, navigate }: { children: ReactNode; currentRoute: string; navigate: (r: string) => void }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div className="flex h-screen bg-slate-50 font-sans print:h-auto print:bg-white print:block">
-      <div className="print:hidden shrink-0">
+    <div className="flex h-screen bg-slate-50 font-sans print:h-auto print:bg-white print:block overflow-hidden">
+      {/* Desktop Sidebar (Permanent) */}
+      <div className="hidden md:block print:hidden shrink-0 h-full">
         <Sidebar currentRoute={currentRoute} navigate={navigate} />
       </div>
-      <div className="flex-1 flex flex-col overflow-hidden print:overflow-visible print:block">
-        <div className="print:hidden shrink-0">
-          <Header />
+
+      {/* Mobile Drawer (Slide-over) */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex print:hidden">
+          {/* Overlay Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          {/* Drawer Sidebar */}
+          <div className="relative z-10 w-[240px] max-w-[80vw] bg-slate-800 h-full shadow-2xl">
+            <Sidebar
+              currentRoute={currentRoute}
+              navigate={navigate}
+              onItemClick={() => setMobileMenuOpen(false)}
+            />
+          </div>
         </div>
-        <main className="flex-1 overflow-y-auto p-4 print:p-0 print:overflow-visible print:block">
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden print:overflow-visible print:block">
+        <div className="print:hidden shrink-0">
+          <Header onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)} />
+        </div>
+        <main className="flex-1 overflow-y-auto p-2.5 sm:p-4 print:p-0 print:overflow-visible print:block">
           {children}
         </main>
       </div>
