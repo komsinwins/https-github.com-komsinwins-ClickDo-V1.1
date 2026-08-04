@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
 import { differenceInDays, parseISO, isValid, addDays, format, min, max } from 'date-fns';
-import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock } from 'lucide-react';
+import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ScopeOfWork as ScopeType } from '../../types';
 import { SaveButton } from '../../components/SaveButton';
@@ -23,6 +23,13 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   const mainScopes = projectScopes.filter(s => !s.parentId);
 
   const [paperSize, setPaperSize] = useState<'a4' | 'a3'>('a4');
+  const [pdfIncludeMode, setPdfIncludeMode] = useState<'both' | 'table' | 'gantt'>('both');
+  const [pdfIncludeSignatures, setPdfIncludeSignatures] = useState<boolean>(true);
+  const [pdfNotesText, setPdfNotesText] = useState<string>(
+    '1. แผนงานนี้ประเมินจากขอบเขตงานและสภาวะการทำงานปกติ\n2. การปรับเปลี่ยนระยะเวลาอาจเกิดขึ้นได้ตามสภาพแวดล้อมหรือการเปลี่ยนแปลงขอบเขตงาน'
+  );
+  const [showPdfPreview, setShowPdfPreview] = useState<boolean>(false);
+
   const reportRef = useRef<HTMLDivElement>(null);
 
   if (!project) return null;
@@ -288,118 +295,177 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
+      {/* Print CSS Styles */}
+      <style>{`
+        @media print {
+          @page {
+            size: ${paperSize.toUpperCase()} landscape;
+            margin: 6mm;
+          }
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background-color: white !important;
+          }
+          .print\\:hidden {
+            display: none !important;
+          }
+          .print\\:block {
+            display: block !important;
+          }
+          .screen-only-view {
+            display: none !important;
+          }
+        }
+      `}</style>
+
       {/* Controls Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
-        <div className="flex gap-3 w-full sm:w-auto flex-wrap">
-          <div className="flex bg-slate-100 p-1 rounded-md mb-2 sm:mb-0 w-full sm:w-auto">
-            <button
-              onClick={() => setView('table')}
-              className={`flex-1 sm:flex-none flex justify-center items-center gap-2 px-3 py-1.5 text-xs font-medium rounded transition-colors ${view === 'table' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              <TableIcon className="w-3.5 h-3.5" />
-              {lang === 'th' ? 'ตารางข้อมูล' : 'Table View'}
-            </button>
-            <button
-              onClick={() => setView('gantt')}
-              className={`flex-1 sm:flex-none flex justify-center items-center gap-2 px-3 py-1.5 text-xs font-medium rounded transition-colors ${view === 'gantt' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              <BarChart className="w-3.5 h-3.5" />
-              {lang === 'th' ? 'แกนต์ชาร์ต' : 'Gantt Chart'}
-            </button>
-          </div>
-          
-          <div className="flex flex-wrap sm:flex-nowrap gap-2 flex-1 min-w-[280px]">
-            <select
-              value={taskType}
-              onChange={(e) => setTaskType(e.target.value as 'main' | 'sub')}
-              className="px-2 py-1.5 text-xs font-semibold border border-slate-300 rounded bg-slate-50 text-slate-700 outline-none focus:border-[#0061FF]"
-            >
-              <option value="main">{lang === 'th' ? 'งานหลัก' : 'Main Task'}</option>
-              {mainScopes.length > 0 && (
-                <option value="sub">{lang === 'th' ? 'งานย่อย' : 'Sub Task'}</option>
-              )}
-            </select>
-
-            {taskType === 'sub' && mainScopes.length > 0 && (
-              <select
-                value={selectedParentId || mainScopes[0]?.id}
-                onChange={(e) => setSelectedParentId(e.target.value)}
-                className="px-2 py-1.5 text-xs border border-slate-300 rounded bg-white text-slate-700 max-w-[160px] truncate outline-none focus:border-[#0061FF]"
+      <div className="flex flex-col space-y-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm print:hidden">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          {/* Left: View Tabs and Add Task */}
+          <div className="flex gap-3 w-full lg:w-auto flex-wrap items-center">
+            <div className="flex bg-slate-100 p-1 rounded-md w-full sm:w-auto">
+              <button
+                onClick={() => setView('table')}
+                className={`flex-1 sm:flex-none flex justify-center items-center gap-2 px-3 py-1.5 text-xs font-medium rounded transition-colors ${view === 'table' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
               >
-                {mainScopes.map((m, idx) => (
-                  <option key={m.id} value={m.id}>
-                    {idx + 1}. {m.taskName}
-                  </option>
-                ))}
+                <TableIcon className="w-3.5 h-3.5" />
+                {lang === 'th' ? 'ตารางข้อมูล' : 'Table View'}
+              </button>
+              <button
+                onClick={() => setView('gantt')}
+                className={`flex-1 sm:flex-none flex justify-center items-center gap-2 px-3 py-1.5 text-xs font-medium rounded transition-colors ${view === 'gantt' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                <BarChart className="w-3.5 h-3.5" />
+                {lang === 'th' ? 'แกนต์ชาร์ต' : 'Gantt Chart'}
+              </button>
+            </div>
+            
+            <div className="flex flex-wrap sm:flex-nowrap gap-2 flex-1 min-w-[280px]">
+              <select
+                value={taskType}
+                onChange={(e) => setTaskType(e.target.value as 'main' | 'sub')}
+                className="px-2 py-1.5 text-xs font-semibold border border-slate-300 rounded bg-slate-50 text-slate-700 outline-none focus:border-[#0061FF]"
+              >
+                <option value="main">{lang === 'th' ? 'งานหลัก' : 'Main Task'}</option>
+                {mainScopes.length > 0 && (
+                  <option value="sub">{lang === 'th' ? 'งานย่อย' : 'Sub Task'}</option>
+                )}
               </select>
-            )}
 
-            <input
-              type="text"
-              value={newTask}
-              onChange={(e) => setNewTask(e.target.value)}
-              placeholder={
-                taskType === 'sub'
-                  ? (lang === 'th' ? 'กรอกชื่อขอบเขตงานย่อย...' : 'Enter sub-task name...')
-                  : (lang === 'th' ? 'กรอกชื่อขอบเขตงานหลัก...' : 'Enter main task name...')
-              }
-              className="flex-1 min-w-[150px] px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF]"
-              onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
-            />
-            <button
-              onClick={handleAddTask}
-              className="px-4 py-1.5 bg-[#0061FF] text-white rounded text-sm font-semibold hover:bg-blue-700 flex items-center gap-1.5 flex-shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>
-                {taskType === 'sub'
-                  ? (lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task')
-                  : (lang === 'th' ? 'เพิ่มงานหลัก' : 'Add Main Task')}
-              </span>
-            </button>
+              {taskType === 'sub' && mainScopes.length > 0 && (
+                <select
+                  value={selectedParentId || mainScopes[0]?.id}
+                  onChange={(e) => setSelectedParentId(e.target.value)}
+                  className="px-2 py-1.5 text-xs border border-slate-300 rounded bg-white text-slate-700 max-w-[160px] truncate outline-none focus:border-[#0061FF]"
+                >
+                  {mainScopes.map((m, idx) => (
+                    <option key={m.id} value={m.id}>
+                      {idx + 1}. {m.taskName}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <input
+                type="text"
+                value={newTask}
+                onChange={(e) => setNewTask(e.target.value)}
+                placeholder={
+                  taskType === 'sub'
+                    ? (lang === 'th' ? 'กรอกชื่อขอบเขตงานย่อย...' : 'Enter sub-task name...')
+                    : (lang === 'th' ? 'กรอกชื่อขอบเขตงานหลัก...' : 'Enter main task name...')
+                }
+                className="flex-1 min-w-[150px] px-3 py-1.5 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-[#0061FF]"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
+              />
+              <button
+                onClick={handleAddTask}
+                className="px-4 py-1.5 bg-[#0061FF] text-white rounded text-sm font-semibold hover:bg-blue-700 flex items-center gap-1.5 flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>
+                  {taskType === 'sub'
+                    ? (lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task')
+                    : (lang === 'th' ? 'เพิ่มงานหลัก' : 'Add Main Task')}
+                </span>
+              </button>
+            </div>
           </div>
+
+          <SaveButton successMessage={lang === 'th' ? 'บันทึกแผนงานเรียบร้อยแล้ว' : 'Schedule plan saved successfully'} />
         </div>
 
-        <div className="flex items-center gap-3">
-          <style>{`
-            @media print {
-              @page {
-                size: ${paperSize.toUpperCase()} landscape;
-                margin: 8mm;
-              }
-              body {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                background-color: white !important;
-              }
-              .print\\:hidden {
-                display: none !important;
-              }
-              input {
-                border: none !important;
-                background: transparent !important;
-              }
-            }
-          `}</style>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500 font-medium">{lang === 'th' ? 'ขนาดกระดาษ PDF:' : 'PDF Paper Size:'}</span>
-            <select
-              value={paperSize}
-              onChange={(e) => setPaperSize(e.target.value as 'a4' | 'a3')}
-              className="border border-slate-300 rounded px-2.5 py-1 bg-white font-medium text-slate-700 outline-none focus:border-[#0061FF]"
-            >
-              <option value="a4">{lang === 'th' ? 'A4 (แนวนอน)' : 'A4 (Landscape)'}</option>
-              <option value="a3">{lang === 'th' ? 'A3 (แนวนอน)' : 'A3 (Landscape)'}</option>
-            </select>
+        {/* PDF Export Config Sub-Bar */}
+        <div className="pt-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-50/70 p-2.5 rounded-md">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="font-bold text-slate-700 flex items-center gap-1">
+              <Sliders className="w-3.5 h-3.5 text-blue-600" />
+              {lang === 'th' ? 'ตั้งค่ารายงาน PDF:' : 'PDF Export Config:'}
+            </span>
+
+            {/* Paper Size */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500">{lang === 'th' ? 'กระดาษ:' : 'Paper:'}</span>
+              <select
+                value={paperSize}
+                onChange={(e) => setPaperSize(e.target.value as 'a4' | 'a3')}
+                className="border border-slate-300 rounded px-2 py-0.5 bg-white font-medium text-slate-700 outline-none focus:border-[#0061FF]"
+              >
+                <option value="a4">{lang === 'th' ? 'A4 แนวนอน' : 'A4 Landscape'}</option>
+                <option value="a3">{lang === 'th' ? 'A3 แนวนอน' : 'A3 Landscape'}</option>
+              </select>
+            </div>
+
+            {/* Export Content Mode */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500">{lang === 'th' ? 'เนื้อหา:' : 'Content:'}</span>
+              <select
+                value={pdfIncludeMode}
+                onChange={(e) => setPdfIncludeMode(e.target.value as 'both' | 'table' | 'gantt')}
+                className="border border-slate-300 rounded px-2 py-0.5 bg-white font-medium text-slate-700 outline-none focus:border-[#0061FF]"
+              >
+                <option value="both">{lang === 'th' ? 'ตาราง + แกนต์ชาร์ต' : 'Table + Gantt'}</option>
+                <option value="table">{lang === 'th' ? 'เฉพาะตารางข้อมูล' : 'Table Only'}</option>
+                <option value="gantt">{lang === 'th' ? 'เฉพาะแกนต์ชาร์ต' : 'Gantt Only'}</option>
+              </select>
+            </div>
+
+            {/* Signatures Toggle */}
+            <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+              <input
+                type="checkbox"
+                checked={pdfIncludeSignatures}
+                onChange={(e) => setPdfIncludeSignatures(e.target.checked)}
+                className="rounded border-slate-300 text-[#0061FF] focus:ring-0"
+              />
+              <span>{lang === 'th' ? 'แสดงส่วนลงนาม' : 'Include Signatures'}</span>
+            </label>
           </div>
-          <button
-            onClick={exportPDF}
-            className="px-3.5 py-1.5 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 flex items-center gap-2 transition-colors print:hidden shadow-sm"
-          >
-            <Download className="w-3.5 h-3.5" />
-            {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print / Export PDF'}
-          </button>
-          <SaveButton successMessage={lang === 'th' ? 'บันทึกแผนงานเรียบร้อยแล้ว' : 'Schedule plan saved successfully'} />
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowPdfPreview(!showPdfPreview)}
+              className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
+                showPdfPreview 
+                  ? 'bg-blue-50 border-blue-300 text-blue-700' 
+                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              {showPdfPreview 
+                ? (lang === 'th' ? 'ปิดตัวอย่าง PDF' : 'Close PDF Preview')
+                : (lang === 'th' ? 'ดูตัวอย่าง PDF' : 'Preview PDF Report')}
+            </button>
+
+            <button
+              onClick={exportPDF}
+              className="px-3.5 py-1 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 flex items-center gap-1.5 transition-colors shadow-sm"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print / Export PDF'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1012,6 +1078,479 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
             )}
           </div>
         )}
+      </div>
+
+      {/* Printable PDF Report Container (Hidden on screen, visible during browser print) */}
+      <div className="hidden print:block font-sans text-slate-800">
+        <SchedulePlanPDFReport
+          project={project}
+          mainScopes={mainScopes}
+          projectScopes={projectScopes}
+          itemCalculatedDates={itemCalculatedDates}
+          projectStartDate={projectStartDate}
+          minDate={minDate}
+          maxDate={maxDate}
+          totalDays={totalDays}
+          overallProgress={overallProgress}
+          lang={lang}
+          pdfIncludeMode={pdfIncludeMode}
+          pdfIncludeSignatures={pdfIncludeSignatures}
+          pdfNotesText={pdfNotesText}
+          getItemProgress={getItemProgress}
+        />
+      </div>
+
+      {/* PDF Modal Preview on Screen */}
+      {showPdfPreview && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto print:hidden">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-300">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-800 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-400" />
+                <h3 className="font-bold text-base">
+                  {lang === 'th' ? 'ตัวอย่างรายงาน PDF (PDF Document Preview)' : 'PDF Document Preview'}
+                </h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={exportPDF}
+                  className="px-3.5 py-1.5 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 flex items-center gap-1.5"
+                >
+                  <Printer className="w-4 h-4" />
+                  {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print PDF'}
+                </button>
+                <button
+                  onClick={() => setShowPdfPreview(false)}
+                  className="text-slate-300 hover:text-white text-sm font-bold px-2 py-1 bg-white/10 rounded"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Editable Remarks in Preview */}
+            <div className="p-3 bg-slate-100 border-b border-slate-200 text-xs shrink-0 flex items-start gap-2">
+              <span className="font-bold text-slate-700 whitespace-nowrap mt-1">
+                {lang === 'th' ? 'หมายเหตุท้ายเอกสาร:' : 'Remarks:'}
+              </span>
+              <textarea
+                value={pdfNotesText}
+                onChange={(e) => setPdfNotesText(e.target.value)}
+                rows={2}
+                className="flex-1 text-xs border border-slate-300 rounded p-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
+                placeholder={lang === 'th' ? 'เพิ่มหมายเหตุหรือเงื่อนไขการทำงาน...' : 'Add notes or conditions...'}
+              />
+            </div>
+
+            {/* PDF Render Preview Area */}
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-200">
+              <div className="bg-white shadow-lg mx-auto max-w-4xl rounded-sm p-2">
+                <SchedulePlanPDFReport
+                  project={project}
+                  mainScopes={mainScopes}
+                  projectScopes={projectScopes}
+                  itemCalculatedDates={itemCalculatedDates}
+                  projectStartDate={projectStartDate}
+                  minDate={minDate}
+                  maxDate={maxDate}
+                  totalDays={totalDays}
+                  overallProgress={overallProgress}
+                  lang={lang}
+                  pdfIncludeMode={pdfIncludeMode}
+                  pdfIncludeSignatures={pdfIncludeSignatures}
+                  pdfNotesText={pdfNotesText}
+                  getItemProgress={getItemProgress}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Sub-component for rendering official, beautiful PDF Report
+function SchedulePlanPDFReport({
+  project,
+  mainScopes,
+  projectScopes,
+  itemCalculatedDates,
+  projectStartDate,
+  minDate,
+  maxDate,
+  totalDays,
+  overallProgress,
+  lang,
+  pdfIncludeMode,
+  pdfIncludeSignatures,
+  pdfNotesText,
+  getItemProgress,
+}: {
+  project: any;
+  mainScopes: ScopeType[];
+  projectScopes: ScopeType[];
+  itemCalculatedDates: Record<string, { start: Date; end: Date; duration: number }>;
+  projectStartDate: Date;
+  minDate: Date;
+  maxDate: Date;
+  totalDays: number;
+  overallProgress: number;
+  lang: string;
+  pdfIncludeMode: 'both' | 'table' | 'gantt';
+  pdfIncludeSignatures: boolean;
+  pdfNotesText: string;
+  getItemProgress: (s: ScopeType) => number;
+}) {
+  const subTasksCount = projectScopes.filter(s => s.parentId).length;
+  const totalPlannedDays = Math.max(1, differenceInDays(maxDate, projectStartDate) + 1);
+
+  return (
+    <div className="bg-white p-6 text-slate-800 space-y-5 border border-slate-200 rounded">
+      {/* Official Header */}
+      <div className="border-b-2 border-slate-800 pb-3">
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <span className="bg-slate-900 text-white px-2 py-0.5 rounded text-sm font-black">WIN</span>
+              <span>WIN SECURITY SERVICE COMPANY LIMITED</span>
+            </div>
+            <div className="text-xs text-slate-600 font-medium mt-0.5">บริษัท วิน เซคคิวริตี้ เซอร์วิส จำกัด | ClickDo Project Management System</div>
+          </div>
+          <div className="text-right">
+            <div className="text-[11px] font-bold text-blue-800 uppercase bg-blue-50 px-2.5 py-1 rounded border border-blue-200 inline-block">
+              {lang === 'th' ? 'เอกสารประเมินแผนงาน' : 'Schedule Estimation Report'}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1">
+              {lang === 'th' ? 'วันที่พิมพ์:' : 'Issued:'} {format(new Date(), 'dd/MM/yyyy HH:mm')}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 text-center bg-slate-900 text-white py-2 rounded shadow-xs">
+          <h2 className="text-base font-black tracking-wide uppercase">
+            {lang === 'th' ? 'ตารางประเมินและประเมินระยะเวลาการทำงาน (SCHEDULE & DURATION ESTIMATION PLAN)' : 'SCHEDULE & DURATION ESTIMATION PLAN'}
+          </h2>
+        </div>
+      </div>
+
+      {/* Project Metadata Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded border border-slate-200 text-xs">
+        <div>
+          <span className="text-slate-500 block text-[10px] uppercase font-bold">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</span>
+          <span className="font-bold text-slate-900">{project.name}</span>
+        </div>
+        <div>
+          <span className="text-slate-500 block text-[10px] uppercase font-bold">{lang === 'th' ? 'รหัสโครงการ' : 'Project Code'}</span>
+          <span className="font-mono font-bold text-slate-800">{project.projectNumber || `PRJ-${project.id.slice(0, 6).toUpperCase()}`}</span>
+        </div>
+        <div>
+          <span className="text-slate-500 block text-[10px] uppercase font-bold">{lang === 'th' ? 'ผู้ว่าจ้าง / ลูกค้า' : 'Client / Owner'}</span>
+          <span className="font-semibold text-slate-800">{project.clientName || 'WIN SECURITY SERVICE'}</span>
+        </div>
+        <div>
+          <span className="text-slate-500 block text-[10px] uppercase font-bold">{lang === 'th' ? 'สถานที่ดำเนินงาน' : 'Location'}</span>
+          <span className="font-semibold text-slate-800">{project.location || 'ไม่ระบุ'}</span>
+        </div>
+        <div>
+          <span className="text-slate-500 block text-[10px] uppercase font-bold">{lang === 'th' ? 'วันที่เริ่มโครงการ' : 'Start Date'}</span>
+          <span className="font-bold text-blue-700">{format(projectStartDate, 'dd/MM/yyyy')}</span>
+        </div>
+        <div>
+          <span className="text-slate-500 block text-[10px] uppercase font-bold">{lang === 'th' ? 'วันที่คาดว่าแล้วเสร็จ' : 'Est. Completion'}</span>
+          <span className="font-bold text-blue-700">{format(maxDate, 'dd/MM/yyyy')}</span>
+        </div>
+        <div>
+          <span className="text-slate-500 block text-[10px] uppercase font-bold">{lang === 'th' ? 'ระยะเวลารวมตามแผน' : 'Total Planned Duration'}</span>
+          <span className="font-bold text-slate-900">{totalPlannedDays} {lang === 'th' ? 'วัน' : 'days'}</span>
+        </div>
+        <div>
+          <span className="text-slate-500 block text-[10px] uppercase font-bold">{lang === 'th' ? 'ความคืบหน้ารวม' : 'Overall Progress'}</span>
+          <span className="font-black text-emerald-600">{overallProgress}%</span>
+        </div>
+      </div>
+
+      {/* KPI Stats Bar */}
+      <div className="grid grid-cols-4 gap-2 text-center text-xs">
+        <div className="bg-blue-50/80 border border-blue-200 p-2 rounded">
+          <div className="text-slate-500 text-[10px] font-medium">{lang === 'th' ? 'หมวดงานหลัก' : 'Main Scopes'}</div>
+          <div className="text-sm font-black text-blue-900 mt-0.5">{mainScopes.length} {lang === 'th' ? 'หมวด' : 'Scopes'}</div>
+        </div>
+        <div className="bg-slate-50 border border-slate-200 p-2 rounded">
+          <div className="text-slate-500 text-[10px] font-medium">{lang === 'th' ? 'งานย่อยทั้งหมด' : 'Sub Tasks'}</div>
+          <div className="text-sm font-black text-slate-800 mt-0.5">{subTasksCount} {lang === 'th' ? 'รายการ' : 'Items'}</div>
+        </div>
+        <div className="bg-slate-50 border border-slate-200 p-2 rounded">
+          <div className="text-slate-500 text-[10px] font-medium">{lang === 'th' ? 'จำนวนวันทำงาน' : 'Planned Days'}</div>
+          <div className="text-sm font-black text-slate-800 mt-0.5">{totalPlannedDays} {lang === 'th' ? 'วัน' : 'Days'}</div>
+        </div>
+        <div className="bg-emerald-50 border border-emerald-200 p-2 rounded">
+          <div className="text-slate-500 text-[10px] font-medium">{lang === 'th' ? 'ความคืบหน้าโครงการ' : 'Overall Progress'}</div>
+          <div className="text-sm font-black text-emerald-700 mt-0.5">{overallProgress}%</div>
+        </div>
+      </div>
+
+      {/* Table Section */}
+      {(pdfIncludeMode === 'both' || pdfIncludeMode === 'table') && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between border-b border-slate-300 pb-1">
+            <h3 className="font-bold text-slate-900 text-xs flex items-center gap-1.5 uppercase">
+              <span className="w-2 h-2 bg-blue-600 rounded-full inline-block"></span>
+              {lang === 'th' ? '1. ตารางประเมินและแผนงานดำเนินงาน (Schedule Plan Table)' : '1. Schedule Plan Table'}
+            </h3>
+          </div>
+
+          <table className="w-full text-left text-[10px] border-collapse border border-slate-300">
+            <thead>
+              <tr className="bg-slate-800 text-white font-semibold text-center">
+                <th className="p-1.5 border border-slate-600 w-8">#</th>
+                <th className="p-1.5 border border-slate-600 text-left w-2/5">{lang === 'th' ? 'รายการขอบเขตงาน / หัวข้อย่อย' : 'Scope / Sub-topic'}</th>
+                <th className="p-1.5 border border-slate-600 w-12">{lang === 'th' ? 'วัน' : 'Days'}</th>
+                <th className="p-1.5 border border-slate-600">{lang === 'th' ? 'เริ่มตามแผน' : 'Baseline Start'}</th>
+                <th className="p-1.5 border border-slate-600">{lang === 'th' ? 'สิ้นสุดตามแผน' : 'Baseline End'}</th>
+                <th className="p-1.5 border border-slate-600">{lang === 'th' ? 'เริ่มจริง' : 'Actual Start'}</th>
+                <th className="p-1.5 border border-slate-600">{lang === 'th' ? 'สิ้นสุดจริง' : 'Actual End'}</th>
+                <th className="p-1.5 border border-slate-600 w-14">{lang === 'th' ? '% คืบหน้า' : 'Progress'}</th>
+                <th className="p-1.5 border border-slate-600 w-20">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mainScopes.map((main, mainIdx) => {
+                const subScopes = projectScopes.filter(s => s.parentId === main.id);
+                const mainDates = itemCalculatedDates[main.id] || { start: projectStartDate, end: projectStartDate, duration: 1 };
+                const computedProgress = getItemProgress(main);
+
+                const mStartDayNum = Math.max(1, differenceInDays(mainDates.start, projectStartDate) + 1);
+                const mEndDayNum = Math.max(1, differenceInDays(mainDates.end, projectStartDate) + 1);
+
+                return (
+                  <React.Fragment key={main.id}>
+                    {/* Main Task Row */}
+                    <tr className="bg-slate-100 font-bold text-slate-900 border-b border-slate-300">
+                      <td className="p-1.5 text-center border-r border-slate-300">{mainIdx + 1}</td>
+                      <td className="p-1.5 border-r border-slate-300 font-bold">
+                        {main.taskName}
+                        <span className="block text-[9px] text-blue-700 font-normal">
+                          ({lang === 'th' ? `วันที่ ${mStartDayNum} - ${mEndDayNum}` : `Day ${mStartDayNum} - ${mEndDayNum}`})
+                        </span>
+                      </td>
+                      <td className="p-1.5 text-center border-r border-slate-300 text-blue-800">{mainDates.duration}</td>
+                      <td className="p-1.5 text-center border-r border-slate-300">{format(mainDates.start, 'dd/MM/yyyy')}</td>
+                      <td className="p-1.5 text-center border-r border-slate-300">{format(mainDates.end, 'dd/MM/yyyy')}</td>
+                      <td className="p-1.5 text-center border-r border-slate-300 text-slate-700">{main.actualStartDate ? format(parseISO(main.actualStartDate), 'dd/MM/yyyy') : '-'}</td>
+                      <td className="p-1.5 text-center border-r border-slate-300 text-slate-700">{main.actualEndDate ? format(parseISO(main.actualEndDate), 'dd/MM/yyyy') : '-'}</td>
+                      <td className="p-1.5 text-center border-r border-slate-300 font-black text-blue-700">{computedProgress}%</td>
+                      <td className="p-1.5 text-center">
+                        {computedProgress === 100 ? (
+                          <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded border border-emerald-300">
+                            {lang === 'th' ? 'เสร็จสมบูรณ์' : 'Done'}
+                          </span>
+                        ) : computedProgress > 0 ? (
+                          <span className="bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-0.5 rounded border border-amber-300">
+                            {lang === 'th' ? 'กำลังดำเนินงาน' : 'Ongoing'}
+                          </span>
+                        ) : (
+                          <span className="bg-slate-100 text-slate-600 text-[9px] font-medium px-1.5 py-0.5 rounded border border-slate-300">
+                            {lang === 'th' ? 'ยังไม่เริ่ม' : 'Pending'}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+
+                    {/* Subtasks */}
+                    {subScopes.map((sub, subIdx) => {
+                      const subDates = itemCalculatedDates[sub.id] || { start: projectStartDate, end: projectStartDate, duration: 1 };
+                      const sStartDayNum = Math.max(1, differenceInDays(subDates.start, projectStartDate) + 1);
+                      const sEndDayNum = Math.max(1, differenceInDays(subDates.end, projectStartDate) + 1);
+                      const subProg = sub.progress || 0;
+
+                      return (
+                        <tr key={sub.id} className="bg-white text-slate-700 border-b border-slate-200">
+                          <td className="p-1 text-center text-slate-400 text-[9px] border-r border-slate-200">{mainIdx + 1}.{subIdx + 1}</td>
+                          <td className="p-1 pl-5 border-r border-slate-200">
+                            <span className="font-medium text-slate-800">└ {sub.taskName}</span>
+                            <span className="text-[8px] text-slate-500 block pl-2">
+                              ({lang === 'th' ? `วันที่ ${sStartDayNum} - ${sEndDayNum}` : `Day ${sStartDayNum} - ${sEndDayNum}`})
+                            </span>
+                          </td>
+                          <td className="p-1 text-center border-r border-slate-200">{subDates.duration}</td>
+                          <td className="p-1 text-center border-r border-slate-200">{format(subDates.start, 'dd/MM/yyyy')}</td>
+                          <td className="p-1 text-center border-r border-slate-200">{format(subDates.end, 'dd/MM/yyyy')}</td>
+                          <td className="p-1 text-center border-r border-slate-200 text-slate-600">{sub.actualStartDate ? format(parseISO(sub.actualStartDate), 'dd/MM/yyyy') : '-'}</td>
+                          <td className="p-1 text-center border-r border-slate-200 text-slate-600">{sub.actualEndDate ? format(parseISO(sub.actualEndDate), 'dd/MM/yyyy') : '-'}</td>
+                          <td className="p-1 text-center border-r border-slate-200 font-bold text-slate-800">{subProg}%</td>
+                          <td className="p-1 text-center">
+                            {subProg === 100 ? (
+                              <span className="text-emerald-700 text-[8px] font-bold">✓ {lang === 'th' ? 'เสร็จสิ้น' : 'Done'}</span>
+                            ) : subProg > 0 ? (
+                              <span className="text-amber-700 text-[8px] font-bold">⏱ {subProg}%</span>
+                            ) : (
+                              <span className="text-slate-400 text-[8px]">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-slate-900 text-white font-bold text-[10px]">
+                <td colSpan={2} className="p-1.5 text-right">{lang === 'th' ? 'สรุปภาพรวมแผนงาน (Project Summary)' : 'Project Summary'}</td>
+                <td className="p-1.5 text-center">{totalPlannedDays} {lang === 'th' ? 'วัน' : 'D'}</td>
+                <td className="p-1.5 text-center">{format(projectStartDate, 'dd/MM/yyyy')}</td>
+                <td className="p-1.5 text-center">{format(maxDate, 'dd/MM/yyyy')}</td>
+                <td colSpan={2} className="p-1.5 text-center"></td>
+                <td className="p-1.5 text-center text-emerald-400 font-black">{overallProgress}%</td>
+                <td className="p-1.5 text-center"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {/* Gantt Chart Section */}
+      {(pdfIncludeMode === 'both' || pdfIncludeMode === 'gantt') && (
+        <div className="space-y-1.5 pt-1">
+          <div className="flex items-center justify-between border-b border-slate-300 pb-1">
+            <h3 className="font-bold text-slate-900 text-xs flex items-center gap-1.5 uppercase">
+              <span className="w-2 h-2 bg-indigo-600 rounded-full inline-block"></span>
+              {lang === 'th' ? '2. แผนผังระยะเวลาทำงาน (Gantt Chart Timeline)' : '2. Gantt Chart Timeline'}
+            </h3>
+          </div>
+
+          <div className="border border-slate-300 rounded p-2 bg-slate-50/50">
+            {/* Timeline Header */}
+            <div className="flex justify-between text-[9px] text-slate-600 font-mono font-bold border-b border-slate-300 pb-1 mb-1.5 pl-[150px]">
+              <span>{format(minDate, 'dd/MM/yyyy')}</span>
+              <span>{format(maxDate, 'dd/MM/yyyy')}</span>
+            </div>
+
+            {/* Task Timeline Bars */}
+            <div className="space-y-1 text-[10px]">
+              {mainScopes.map((main, mainIdx) => {
+                const subScopes = projectScopes.filter(s => s.parentId === main.id);
+                const mainDates = itemCalculatedDates[main.id] || { start: minDate, end: maxDate, duration: 1 };
+                const mStartOffset = differenceInDays(mainDates.start, minDate);
+                const mStart = Math.max(0, (mStartOffset / totalDays) * 100);
+                const mWidth = Math.min(100 - mStart, (mainDates.duration / totalDays) * 100);
+                const computedProg = getItemProgress(main);
+
+                return (
+                  <div key={main.id} className="space-y-0.5">
+                    <div className="flex items-center">
+                      <div className="w-[150px] shrink-0 font-bold text-slate-900 truncate pr-2 text-[10px]">
+                        {mainIdx + 1}. {main.taskName}
+                      </div>
+                      <div className="flex-1 h-4 relative bg-white border border-slate-200 rounded overflow-hidden">
+                        {mWidth > 0 && (
+                          <div
+                            className="absolute top-0.5 h-3 bg-blue-500 rounded text-[8px] font-bold text-white flex items-center px-1"
+                            style={{ left: `${mStart}%`, width: `${mWidth}%` }}
+                          >
+                            <span className="truncate">{mainDates.duration}d ({computedProg}%)</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Subtasks Gantt */}
+                    {subScopes.map((sub, subIdx) => {
+                      const subDates = itemCalculatedDates[sub.id] || { start: minDate, end: maxDate, duration: 1 };
+                      const sStartOffset = differenceInDays(subDates.start, minDate);
+                      const sStart = Math.max(0, (sStartOffset / totalDays) * 100);
+                      const sWidth = Math.min(100 - sStart, (subDates.duration / totalDays) * 100);
+
+                      return (
+                        <div key={sub.id} className="flex items-center pl-2">
+                          <div className="w-[142px] shrink-0 text-slate-600 font-medium truncate pr-2 text-[9px]">
+                            {mainIdx + 1}.{subIdx + 1} {sub.taskName}
+                          </div>
+                          <div className="flex-1 h-3 relative bg-white border border-slate-200 rounded overflow-hidden">
+                            {sWidth > 0 && (
+                              <div
+                                className={`absolute top-0.5 h-2 rounded text-[7px] font-bold text-white flex items-center px-0.5 ${sub.progress === 100 ? 'bg-emerald-600' : 'bg-amber-500'}`}
+                                style={{ left: `${sStart}%`, width: `${sWidth}%` }}
+                              >
+                                <span className="truncate">{sub.progress || 0}%</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Gantt Legend */}
+            <div className="mt-2 pt-1 border-t border-slate-200 flex justify-center gap-4 text-[9px] text-slate-600">
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2 bg-blue-500 rounded-xs"></span> {lang === 'th' ? 'แผนงาน (Baseline)' : 'Baseline'}</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2 bg-amber-500 rounded-xs"></span> {lang === 'th' ? 'กำลังดำเนินการ' : 'In Progress'}</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2 bg-emerald-600 rounded-xs"></span> {lang === 'th' ? 'เสร็จสมบูรณ์' : 'Completed'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notes Section */}
+      {pdfNotesText && (
+        <div className="bg-slate-50 border border-slate-200 p-2.5 rounded text-[10px] space-y-0.5">
+          <span className="font-bold text-slate-800 block text-[10px]">{lang === 'th' ? 'หมายเหตุและเงื่อนไข:' : 'Remarks & Conditions:'}</span>
+          <pre className="whitespace-pre-wrap font-sans text-slate-600 text-[10px] leading-snug">{pdfNotesText}</pre>
+        </div>
+      )}
+
+      {/* Signatures & Approvals Section */}
+      {pdfIncludeSignatures && (
+        <div className="pt-2">
+          <div className="text-[10px] font-bold text-slate-800 mb-2 border-b border-slate-300 pb-0.5 uppercase tracking-wider">
+            {lang === 'th' ? 'ส่วนการลงนามอนุมัติเอกสาร (Approvals & Signatures)' : 'Approvals & Signatures'}
+          </div>
+          <div className="grid grid-cols-3 gap-4 text-center text-[10px]">
+            {/* Prepared By */}
+            <div className="border border-slate-300 rounded p-3 bg-slate-50/50 flex flex-col justify-between h-32">
+              <div className="font-bold text-slate-800">{lang === 'th' ? 'ผู้จัดทำแผนงาน' : 'Prepared By'}</div>
+              <div className="border-b border-dashed border-slate-400 my-2 mx-3"></div>
+              <div className="text-slate-600 text-[10px]">
+                <div>(............................................................)</div>
+                <div className="mt-0.5 font-semibold text-[9px]">{lang === 'th' ? 'วิศวกร / ผู้จัดการโครงการ' : 'Project Engineer / Manager'}</div>
+                <div className="text-[8px] text-slate-400 mt-0.5">{lang === 'th' ? 'วันที่:' : 'Date:'} ......./......./.......</div>
+              </div>
+            </div>
+
+            {/* Checked By */}
+            <div className="border border-slate-300 rounded p-3 bg-slate-50/50 flex flex-col justify-between h-32">
+              <div className="font-bold text-slate-800">{lang === 'th' ? 'ผู้ตรวจสอบแผนงาน' : 'Checked By'}</div>
+              <div className="border-b border-dashed border-slate-400 my-2 mx-3"></div>
+              <div className="text-slate-600 text-[10px]">
+                <div>(............................................................)</div>
+                <div className="mt-0.5 font-semibold text-[9px]">{lang === 'th' ? 'หัวหน้าฝ่ายปฏิบัติการ' : 'Operations Head'}</div>
+                <div className="text-[8px] text-slate-400 mt-0.5">{lang === 'th' ? 'วันที่:' : 'Date:'} ......./......./.......</div>
+              </div>
+            </div>
+
+            {/* Approved By */}
+            <div className="border border-slate-300 rounded p-3 bg-slate-50/50 flex flex-col justify-between h-32">
+              <div className="font-bold text-slate-800">{lang === 'th' ? 'ผู้อนุมัติ / เจ้าของโครงการ' : 'Approved By / Client'}</div>
+              <div className="border-b border-dashed border-slate-400 my-2 mx-3"></div>
+              <div className="text-slate-600 text-[10px]">
+                <div>(............................................................)</div>
+                <div className="mt-0.5 font-semibold text-[9px]">{lang === 'th' ? 'ตัวแทนผู้ว่าจ้าง / เจ้าของโครงการ' : 'Client Representative'}</div>
+                <div className="text-[8px] text-slate-400 mt-0.5">{lang === 'th' ? 'วันที่:' : 'Date:'} ......./......./.......</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="pt-2 border-t border-slate-200 text-[9px] text-slate-400 flex justify-between">
+        <div>Win Security Service Co., Ltd. | ClickDo Project Management</div>
+        <div>Page 1 of 1</div>
       </div>
     </div>
   );

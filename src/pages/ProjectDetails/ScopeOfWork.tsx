@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, GripVertical, CornerDownRight, Clock } from 'lucide-react';
+import { Plus, Trash2, GripVertical, CornerDownRight } from 'lucide-react';
 import { ScopeOfWork as ScopeType } from '../../types';
 import { SaveButton } from '../../components/SaveButton';
 
@@ -136,7 +136,7 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
       <div className="flex justify-between items-center border-b border-slate-200 pb-3">
         <div>
           <h3 className="text-lg font-bold text-slate-800">{lang === 'th' ? 'ขอบเขตงาน (Scope of Work)' : 'Scope of Work'}</h3>
-          <p className="text-xs text-slate-500">{lang === 'th' ? 'กำหนดหัวข้อหลักและหัวข้อย่อยพร้อมประเมินระยะเวลาทำงาน' : 'Define main and sub topics with estimated duration.'}</p>
+          <p className="text-xs text-slate-500">{lang === 'th' ? 'กำหนดหัวข้อหลักและหัวข้อย่อยขอบเขตงาน' : 'Define main and sub topics for scope of work.'}</p>
         </div>
         <SaveButton successMessage={lang === 'th' ? 'บันทึกขอบเขตงานเรียบร้อยแล้ว' : 'Scope of work saved successfully'} />
       </div>
@@ -192,29 +192,25 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
       </div>
 
       <div className="overflow-x-auto border border-slate-200 rounded-lg bg-white shadow-sm">
-        <table className="w-full text-left text-sm border-collapse min-w-[650px]">
+        <table className="w-full text-left text-sm border-collapse min-w-[500px]">
           <thead className="bg-[#F8FAFC] text-slate-600 border-b border-slate-200">
             <tr>
               <th className="p-3 font-semibold w-10"></th>
               <th className="p-3 font-semibold w-16 text-center">{lang === 'th' ? 'ลำดับ' : 'No.'}</th>
               <th className="p-3 font-semibold">{lang === 'th' ? 'หัวข้อขอบเขตงาน (Scope of Work)' : 'Topic / Scope'}</th>
-              <th className="p-3 font-semibold w-36 text-center">{lang === 'th' ? 'ประเมิน (วัน)' : 'Est. Days'}</th>
               <th className="p-3 font-semibold w-36 text-right">{lang === 'th' ? 'จัดการ' : 'Actions'}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {mainScopes.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-slate-500 bg-slate-50">
+                <td colSpan={4} className="p-8 text-center text-slate-500 bg-slate-50">
                   {lang === 'th' ? 'ยังไม่มีการกำหนดขอบเขตงาน คลิกด้านบนเพื่อเริ่มเพิ่มขอบเขตงานหลัก' : 'No Scope of Work defined yet. Click above to add a main topic.'}
                 </td>
               </tr>
             ) : (
               mainScopes.map((mainScope, mainIdx) => {
                 const subScopes = projectScopes.filter(s => s.parentId === mainScope.id);
-                const hasSubs = subScopes.length > 0;
-                const totalSubDays = subScopes.reduce((sum, sub) => sum + (sub.durationDays || 1), 0);
-                const displayDays = hasSubs ? totalSubDays : (mainScope.durationDays || 1);
 
                 return (
                   <React.Fragment key={mainScope.id}>
@@ -237,25 +233,6 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
                           onChange={(e) => handleUpdate(mainScope.id, 'taskName', e.target.value)}
                           className="w-full border-transparent border-b border-b-slate-300 focus:border-[#0061FF] focus:outline-none p-1 bg-transparent font-semibold text-slate-900"
                         />
-                      </td>
-                      <td className="p-3 text-center">
-                        {hasSubs ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-[#0061FF] border border-blue-200 rounded text-xs font-bold" title={lang === 'th' ? 'คำนวณจากผลรวมหัวข้อย่อย' : 'Sum of sub-topics'}>
-                            <Clock className="w-3 h-3" />
-                            {displayDays} {lang === 'th' ? 'วัน' : 'days'}
-                          </span>
-                        ) : (
-                          <div className="flex items-center justify-center gap-1">
-                            <input
-                              type="number"
-                              min="1"
-                              value={mainScope.durationDays || 1}
-                              onChange={(e) => handleUpdate(mainScope.id, 'durationDays', parseInt(e.target.value) || 1)}
-                              className="w-16 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs font-medium"
-                            />
-                            <span className="text-slate-500 text-xs">{lang === 'th' ? 'วัน' : 'days'}</span>
-                          </div>
-                        )}
                       </td>
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -295,18 +272,6 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
                             />
                           </div>
                         </td>
-                        <td className="p-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <input
-                              type="number"
-                              min="1"
-                              value={subScope.durationDays || 1}
-                              onChange={(e) => handleUpdate(subScope.id, 'durationDays', parseInt(e.target.value) || 1)}
-                              className="w-16 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs"
-                            />
-                            <span className="text-slate-500 text-xs">{lang === 'th' ? 'วัน' : 'days'}</span>
-                          </div>
-                        </td>
                         <td className="p-3 text-right">
                           <button
                             onClick={() => handleDelete(subScope.id)}
@@ -324,7 +289,7 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
                       <tr className="bg-blue-50/30 border-t border-b border-blue-100">
                         <td className="p-2"></td>
                         <td className="p-2 text-center text-xs text-blue-500 font-semibold">{mainIdx + 1}.{subScopes.length + 1}</td>
-                        <td className="p-2 pl-8" colSpan={2}>
+                        <td className="p-2 pl-8">
                           <div className="flex items-center gap-2">
                             <CornerDownRight className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
                             <input
@@ -355,7 +320,7 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
                     ) : (
                       <tr className="bg-slate-50/30 hover:bg-slate-100/50">
                         <td className="p-1"></td>
-                        <td className="p-1.5 pl-6" colSpan={4}>
+                        <td className="p-1.5 pl-6" colSpan={3}>
                           <button
                             onClick={() => setShowSubInput({ ...showSubInput, [mainScope.id]: true })}
                             className="text-xs text-[#0061FF] hover:text-blue-800 font-semibold inline-flex items-center gap-1 px-2 py-0.5 rounded hover:bg-blue-50 transition-colors"
