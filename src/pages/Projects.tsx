@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { Plus, Search, Calendar, MapPin, ChevronRight, FolderKanban, LayoutGrid, List, Trash2 } from 'lucide-react';
+import { Plus, Search, Calendar, MapPin, ChevronRight, FolderKanban, LayoutGrid, List, Trash2, X, Check, FolderPlus } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays, parseISO, format } from 'date-fns';
 
@@ -15,24 +15,71 @@ export function Projects({ navigate }: ProjectsProps) {
   const [sortBy, setSortBy] = useState<'active-first' | 'name-asc' | 'date-desc' | 'date-asc'>('active-first');
   const lang = data.language || 'th';
 
+  // Create Project Modal States
+  const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
+  const [newProjectForm, setNewProjectForm] = useState({
+    name: '',
+    purchaseOrder: '',
+    location: '',
+    installationArea: '',
+    startDate: format(new Date(), 'yyyy-MM-dd'),
+    endDate: format(new Date(), 'yyyy-MM-dd'),
+    customerId: '',
+    ownerId: '',
+    salespersonId: '',
+    managerId: '',
+    statusId: '',
+    projectDetails: '',
+  });
+
   const isProjectClosed = (p: any) => {
     return !!p.actualCompletionDate || (p.statusId && data.projectStatuses?.find(s => s.id === p.statusId)?.name === 'ปิดโครงการ');
   };
 
-  const createNewProject = () => {
-    const newProject = {
-      id: uuidv4(),
-      name: lang === 'th' ? 'โครงการใหม่' : 'New Project',
+  const handleOpenCreateModal = () => {
+    setNewProjectForm({
+      name: '',
+      purchaseOrder: '',
       location: '',
+      installationArea: '',
       startDate: format(new Date(), 'yyyy-MM-dd'),
       endDate: format(new Date(), 'yyyy-MM-dd'),
-      actualCompletionDate: '',
       customerId: '',
       ownerId: '',
       salespersonId: '',
       managerId: '',
+      statusId: '',
+      projectDetails: '',
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleSaveCreateProject = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newProjectForm.name.trim()) {
+      alert(lang === 'th' ? 'กรุณากรอกชื่อโครงการ' : 'Please enter project name');
+      return;
+    }
+
+    const newProject = {
+      id: uuidv4(),
+      name: newProjectForm.name.trim(),
+      purchaseOrder: newProjectForm.purchaseOrder.trim(),
+      location: newProjectForm.location.trim(),
+      installationArea: newProjectForm.installationArea.trim(),
+      startDate: newProjectForm.startDate,
+      endDate: newProjectForm.endDate,
+      actualCompletionDate: '',
+      customerId: newProjectForm.customerId,
+      ownerId: newProjectForm.ownerId,
+      salespersonId: newProjectForm.salespersonId,
+      managerId: newProjectForm.managerId,
+      statusId: newProjectForm.statusId,
+      projectDetails: newProjectForm.projectDetails.trim(),
     };
+
     updateData({ projects: [...data.projects, newProject] });
+    setShowCreateModal(false);
     navigate(`projects/${newProject.id}/info`);
   };
 
@@ -85,7 +132,7 @@ export function Projects({ navigate }: ProjectsProps) {
           <p className="text-xs text-slate-500 mt-1">{lang === 'th' ? 'จัดการโครงการติดตั้งทั้งหมด' : 'Manage all your installation projects.'}</p>
         </div>
         <button
-          onClick={createNewProject}
+          onClick={handleOpenCreateModal}
           className="px-4 py-2 bg-[#0061FF] text-white rounded text-xs font-semibold hover:bg-blue-700 flex items-center gap-2 transition-all"
         >
           <Plus className="w-4 h-4" />
@@ -411,6 +458,179 @@ export function Projects({ navigate }: ProjectsProps) {
           <FolderKanban className="w-12 h-12 text-slate-300 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-slate-700">{lang === 'th' ? 'ไม่พบโครงการ' : 'No projects found'}</h3>
           <p className="text-slate-500 mt-1">{lang === 'th' ? 'ลองค้นหาด้วยคำอื่นหรือสร้างโครงการใหม่' : 'Try a different search term or create a new project.'}</p>
+        </div>
+      )}
+
+      {/* Create New Project Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
+                  <FolderPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">
+                    {lang === 'th' ? 'สร้างโครงการใหม่' : 'Create New Project'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {lang === 'th' ? 'กรอกรายละเอียดเพื่อเริ่มสร้างโครงการใหม่ (ระบบจะสร้างโครงการเมื่อกดบันทึก)' : 'Fill in details to create a new project (saved only upon confirmation)'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCreateProject} className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+              <div className="space-y-1 md:col-span-2">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'} *</label>
+                <input
+                  type="text"
+                  required
+                  value={newProjectForm.name}
+                  onChange={(e) => setNewProjectForm({ ...newProjectForm, name: e.target.value })}
+                  placeholder={lang === 'th' ? 'เช่น โครงการติดตั้งโซลาร์เซลล์ โรงงาน A' : 'e.g. Factory Solar Installation Project A'}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'คำสั่งซื้อ / เลขที่สัญญา (PO)' : 'Purchase Order / Contract No.'}</label>
+                <input
+                  type="text"
+                  value={newProjectForm.purchaseOrder}
+                  onChange={(e) => setNewProjectForm({ ...newProjectForm, purchaseOrder: e.target.value })}
+                  placeholder={lang === 'th' ? 'เช่น PO-2026-001' : 'e.g. PO-2026-001'}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'สถานที่ดำเนินงาน / ติดตั้ง' : 'Installation Location'}</label>
+                <input
+                  type="text"
+                  value={newProjectForm.location}
+                  onChange={(e) => setNewProjectForm({ ...newProjectForm, location: e.target.value })}
+                  placeholder={lang === 'th' ? 'เช่น อาคาร A นิคมอุตสาหกรรม...' : 'e.g. Building A...'}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'ผู้สั่งจ้าง / ลูกค้า' : 'Customer'}</label>
+                <select
+                  value={newProjectForm.customerId}
+                  onChange={(e) => setNewProjectForm({ ...newProjectForm, customerId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">{lang === 'th' ? '-- เลือกผู้สั่งจ้าง --' : '-- Select Customer --'}</option>
+                  {data.customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'เจ้าของโครงการ' : 'Owner'}</label>
+                <select
+                  value={newProjectForm.ownerId}
+                  onChange={(e) => setNewProjectForm({ ...newProjectForm, ownerId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">{lang === 'th' ? '-- เลือกเจ้าของโครงการ --' : '-- Select Owner --'}</option>
+                  {data.owners.map(o => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'ฝ่ายขาย' : 'Salesperson'}</label>
+                <select
+                  value={newProjectForm.salespersonId}
+                  onChange={(e) => setNewProjectForm({ ...newProjectForm, salespersonId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">{lang === 'th' ? '-- เลือกฝ่ายขาย --' : '-- Select Salesperson --'}</option>
+                  {data.salespersons.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'ผจก.โครงการ' : 'Project Manager'}</label>
+                <select
+                  value={newProjectForm.managerId}
+                  onChange={(e) => setNewProjectForm({ ...newProjectForm, managerId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">{lang === 'th' ? '-- เลือก ผจก.โครงการ --' : '-- Select PM --'}</option>
+                  {data.projectManagers.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'วันที่เริ่มโครงการตามสัญญา' : 'Contract Start Date'}</label>
+                <input
+                  type="date"
+                  value={newProjectForm.startDate}
+                  onChange={(e) => setNewProjectForm({ ...newProjectForm, startDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'วันที่สิ้นสุดโครงการตามสัญญา' : 'Contract End Date'}</label>
+                <input
+                  type="date"
+                  value={newProjectForm.endDate}
+                  onChange={(e) => setNewProjectForm({ ...newProjectForm, endDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1 md:col-span-2">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'สถานะโครงการเริ่มต้น' : 'Initial Status'}</label>
+                <select
+                  value={newProjectForm.statusId}
+                  onChange={(e) => setNewProjectForm({ ...newProjectForm, statusId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">{lang === 'th' ? '-- เลือกสถานะ --' : '-- Select Status --'}</option>
+                  {(data.projectStatuses || []).map(st => (
+                    <option key={st.id} value={st.id}>{st.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-3 md:col-span-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
+                >
+                  {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{lang === 'th' ? 'สร้างและบันทึกโครงการ' : 'Save & Create Project'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

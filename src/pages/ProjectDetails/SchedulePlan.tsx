@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
 import { differenceInDays, parseISO, isValid, addDays, format, min, max } from 'date-fns';
-import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer, Zap, Calculator, Sparkles, Users, AlertTriangle, CalendarX, CheckCircle2, ListPlus, Check, Calendar, ArrowRight, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer, Zap, Calculator, Sparkles, Users, AlertTriangle, CalendarX, CheckCircle2, ListPlus, Check, Calendar, ArrowRight, FileSpreadsheet, Loader2, Edit3 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ScopeOfWork as ScopeType } from '../../types';
 import { SaveButton } from '../../components/SaveButton';
@@ -47,6 +47,50 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   const [selectedScopeCheckboxes, setSelectedScopeCheckboxes] = useState<string[]>([]);
   const [customScopeInput, setCustomScopeInput] = useState<string>('');
   const [importTargetParentId, setImportTargetParentId] = useState<string>('new_main');
+
+  // Main Project Info Edit States
+  const [showProjectEditModal, setShowProjectEditModal] = useState<boolean>(false);
+  const [projectEditForm, setProjectEditForm] = useState({
+    name: '',
+    purchaseOrder: '',
+    location: '',
+    installationArea: '',
+    startDate: '',
+    endDate: '',
+    actualCompletionDate: '',
+    customerId: '',
+    ownerId: '',
+    contractorId: '',
+    projectDetails: '',
+  });
+
+  const handleOpenProjectEditModal = () => {
+    if (!project) return;
+    setProjectEditForm({
+      name: project.name || '',
+      purchaseOrder: project.purchaseOrder || '',
+      location: project.location || '',
+      installationArea: project.installationArea || '',
+      startDate: project.startDate || '',
+      endDate: project.endDate || '',
+      actualCompletionDate: project.actualCompletionDate || '',
+      customerId: project.customerId || '',
+      ownerId: project.ownerId || '',
+      contractorId: project.contractorId || '',
+      projectDetails: project.projectDetails || '',
+    });
+    setShowProjectEditModal(true);
+  };
+
+  const handleSaveProjectEdit = () => {
+    if (!project) return;
+    updateData({
+      projects: data.projects.map(p =>
+        p.id === project.id ? { ...p, ...projectEditForm } : p
+      )
+    });
+    setShowProjectEditModal(false);
+  };
 
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -748,14 +792,25 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
             </div>
           </div>
 
-          <button
-            onClick={handleAutoSyncProjectDates}
-            className="px-4 py-2.5 bg-[#0061FF] hover:bg-blue-600 text-white text-xs font-bold rounded-lg shadow-sm border border-blue-400/40 flex items-center justify-center gap-2 transition-all shrink-0 active:scale-95"
-            title={lang === 'th' ? 'คำนวณและอ้างอิงแจกแจงวันที่แผนงานของทุกขอบเขตงานเรียงต่อกันตามวันที่เริ่มโครงการ' : 'Auto-calculate timeline start and end dates based on project start date'}
-          >
-            <Zap className="w-4 h-4 text-amber-300" />
-            <span>{lang === 'th' ? 'อ้างอิงและคำนวณวันที่จากโครงการ' : 'Auto-Sync Dates from Project'}</span>
-          </button>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              onClick={handleOpenProjectEditModal}
+              className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg shadow-sm border border-slate-600 flex items-center justify-center gap-2 transition-all active:scale-95"
+              title={lang === 'th' ? 'แก้ไขข้อมูลหลักของโครงการ เช่น ชื่อโครงการ, สถานที่, เลขที่สัญญา, วันที่เริ่ม/สิ้นสุด' : 'Edit main project info like name, location, PO, dates'}
+            >
+              <Edit3 className="w-4 h-4 text-emerald-400" />
+              <span>{lang === 'th' ? 'แก้ไขข้อมูลหลักโครงการ' : 'Edit Project Main Info'}</span>
+            </button>
+
+            <button
+              onClick={handleAutoSyncProjectDates}
+              className="px-4 py-2.5 bg-[#0061FF] hover:bg-blue-600 text-white text-xs font-bold rounded-lg shadow-sm border border-blue-400/40 flex items-center justify-center gap-2 transition-all shrink-0 active:scale-95"
+              title={lang === 'th' ? 'คำนวณและอ้างอิงแจกแจงวันที่แผนงานของทุกขอบเขตงานเรียงต่อกันตามวันที่เริ่มโครงการ' : 'Auto-calculate timeline start and end dates based on project start date'}
+            >
+              <Zap className="w-4 h-4 text-amber-300" />
+              <span>{lang === 'th' ? 'อ้างอิงและคำนวณวันที่จากโครงการ' : 'Auto-Sync Dates from Project'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2269,6 +2324,154 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Project Info Edit Modal */}
+      {showProjectEditModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 print:hidden">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">
+                    {lang === 'th' ? 'แก้ไขข้อมูลหลักของโครงการ' : 'Edit Main Project Information'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {lang === 'th' ? 'ปรับเปลี่ยนรายละเอียดชื่อโครงการ สถานที่ วันที่สัญญา และข้อมูลอ้างอิง' : 'Update project name, location, contract dates, and reference info'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowProjectEditModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold px-2 py-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+              <div className="space-y-1 md:col-span-2">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'ชื่อโครงการ' : 'Project Name'}</label>
+                <input
+                  type="text"
+                  value={projectEditForm.name}
+                  onChange={(e) => setProjectEditForm({ ...projectEditForm, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'คำสั่งซื้อ / เลขที่สัญญา (PO)' : 'Purchase Order / Contract No.'}</label>
+                <input
+                  type="text"
+                  value={projectEditForm.purchaseOrder}
+                  onChange={(e) => setProjectEditForm({ ...projectEditForm, purchaseOrder: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-blue-500"
+                  placeholder={lang === 'th' ? 'เช่น PO-2026-001' : 'e.g. PO-2026-001'}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'สถานที่ดำเนินงาน / ติดตั้ง' : 'Installation Location'}</label>
+                <input
+                  type="text"
+                  value={projectEditForm.location}
+                  onChange={(e) => setProjectEditForm({ ...projectEditForm, location: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-blue-500"
+                  placeholder={lang === 'th' ? 'เช่น อาคาร A นิคมอุตสาหกรรม...' : 'e.g. Building A...'}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'วันที่เริ่มโครงการตามสัญญา' : 'Contract Start Date'}</label>
+                <input
+                  type="date"
+                  value={projectEditForm.startDate}
+                  onChange={(e) => setProjectEditForm({ ...projectEditForm, startDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'วันที่สิ้นสุดโครงการตามสัญญา' : 'Contract End Date'}</label>
+                <input
+                  type="date"
+                  value={projectEditForm.endDate}
+                  onChange={(e) => setProjectEditForm({ ...projectEditForm, endDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1 md:col-span-2">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'วันที่แล้วเสร็จจริง (ถ้ามี)' : 'Actual Completion Date'}</label>
+                <input
+                  type="date"
+                  value={projectEditForm.actualCompletionDate}
+                  onChange={(e) => setProjectEditForm({ ...projectEditForm, actualCompletionDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'ผู้สั่งจ้าง / ลูกค้า' : 'Customer'}</label>
+                <select
+                  value={projectEditForm.customerId}
+                  onChange={(e) => setProjectEditForm({ ...projectEditForm, customerId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">{lang === 'th' ? '-- เลือกผู้สั่งจ้าง --' : '-- Select Customer --'}</option>
+                  {data.customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'เจ้าของโครงการ' : 'Owner'}</label>
+                <select
+                  value={projectEditForm.ownerId}
+                  onChange={(e) => setProjectEditForm({ ...projectEditForm, ownerId: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">{lang === 'th' ? '-- เลือกเจ้าของโครงการ --' : '-- Select Owner --'}</option>
+                  {data.owners.map(o => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1 md:col-span-2">
+                <label className="font-bold text-slate-700">{lang === 'th' ? 'รายละเอียดเพิ่มเติมของโครงการ' : 'Project Details / Notes'}</label>
+                <textarea
+                  value={projectEditForm.projectDetails}
+                  onChange={(e) => setProjectEditForm({ ...projectEditForm, projectDetails: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-blue-500"
+                  placeholder={lang === 'th' ? 'บันทึกเงื่อนไขหรือหมายเหตุเพิ่มเติมเกี่ยวกับโครงการ...' : 'Notes or special terms...'}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+              <button
+                onClick={() => setShowProjectEditModal(false)}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
+              >
+                {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+              </button>
+              <button
+                onClick={handleSaveProjectEdit}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              >
+                <Check className="w-4 h-4" />
+                <span>{lang === 'th' ? 'บันทึกการแก้ไขข้อมูลหลัก' : 'Save Project Info'}</span>
+              </button>
             </div>
           </div>
         </div>
