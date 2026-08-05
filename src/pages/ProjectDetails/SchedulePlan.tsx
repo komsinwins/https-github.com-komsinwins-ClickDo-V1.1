@@ -1,10 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
 import { differenceInDays, parseISO, isValid, addDays, format, min, max } from 'date-fns';
-import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer, Zap, Calculator, Sparkles, Users, AlertTriangle, CalendarX, CheckCircle2 } from 'lucide-react';
+import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer, Zap, Calculator, Sparkles, Users, AlertTriangle, CalendarX, CheckCircle2, ListPlus, Check, Calendar, ArrowRight, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ScopeOfWork as ScopeType } from '../../types';
 import { SaveButton } from '../../components/SaveButton';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export function SchedulePlan({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
@@ -30,12 +32,20 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   const mainScopes = projectScopes.filter(s => !s.parentId);
 
   const [paperSize, setPaperSize] = useState<'a4' | 'a3'>('a4');
+  const [pdfOrientation, setPdfOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [pdfIncludeMode, setPdfIncludeMode] = useState<'both' | 'table' | 'gantt'>('both');
   const [pdfIncludeSignatures, setPdfIncludeSignatures] = useState<boolean>(true);
   const [pdfNotesText, setPdfNotesText] = useState<string>(
     '1. แผนงานนี้ประเมินจากขอบเขตงานและสภาวะการทำงานปกติ\n2. การปรับเปลี่ยนระยะเวลาอาจเกิดขึ้นได้ตามสภาพแวดล้อมหรือการเปลี่ยนแปลงขอบเขตงาน'
   );
   const [showPdfPreview, setShowPdfPreview] = useState<boolean>(false);
+  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+
+  // Scope Selection Modal States
+  const [showScopePickerModal, setShowScopePickerModal] = useState<boolean>(false);
+  const [selectedScopeNames, setSelectedScopeNames] = useState<string[]>([]);
+  const [customScopeInput, setCustomScopeInput] = useState<string>('');
+  const [importTargetParentId, setImportTargetParentId] = useState<string>('new_main');
 
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -54,25 +64,41 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
   mainScopes.forEach(main => {
     const subScopes = projectScopes.filter(s => s.parentId === main.id);
+    const explicitMainStart = main.baselineStartDate && isValid(parseISO(main.baselineStartDate)) ? parseISO(main.baselineStartDate) : null;
+    const explicitMainEnd = main.baselineEndDate && isValid(parseISO(main.baselineEndDate)) ? parseISO(main.baselineEndDate) : null;
+
     if (subScopes.length === 0) {
       const dur = Math.max(1, main.durationDays || 1);
-      const start = currentPointer;
-      const end = addDays(start, dur - 1);
+      const start = explicitMainStart || currentPointer;
+      const end = explicitMainEnd || addDays(start, dur - 1);
       itemCalculatedDates[main.id] = { start, end, duration: dur };
       currentPointer = addDays(end, 1);
     } else {
-      let mainStart = currentPointer;
+      let mainStart = explicitMainStart || currentPointer;
       let totalDur = 0;
+      let subPointer = mainStart;
+
       subScopes.forEach(sub => {
+        const explicitSubStart = sub.baselineStartDate && isValid(parseISO(sub.baselineStartDate)) ? parseISO(sub.baselineStartDate) : null;
+        const explicitSubEnd = sub.baselineEndDate && isValid(parseISO(sub.baselineEndDate)) ? parseISO(sub.baselineEndDate) : null;
         const dur = Math.max(1, sub.durationDays || 1);
-        const start = currentPointer;
-        const end = addDays(start, dur - 1);
+        const start = explicitSubStart || subPointer;
+        const end = explicitSubEnd || addDays(start, dur - 1);
         itemCalculatedDates[sub.id] = { start, end, duration: dur };
         totalDur += dur;
-        currentPointer = addDays(end, 1);
+        subPointer = addDays(end, 1);
       });
-      const mainEnd = addDays(mainStart, totalDur > 0 ? totalDur - 1 : 0);
-      itemCalculatedDates[main.id] = { start: mainStart, end: mainEnd, duration: totalDur };
+
+      const subEnds = subScopes.map(s => itemCalculatedDates[s.id]?.end).filter(Boolean);
+      const subStarts = subScopes.map(s => itemCalculatedDates[s.id]?.start).filter(Boolean);
+      const calculatedMainStart = subStarts.length > 0 ? min(subStarts) : mainStart;
+      const calculatedMainEnd = subEnds.length > 0 ? max(subEnds) : addDays(mainStart, totalDur > 0 ? totalDur - 1 : 0);
+
+      const finalMainStart = explicitMainStart || calculatedMainStart;
+      const finalMainEnd = explicitMainEnd || calculatedMainEnd;
+
+      itemCalculatedDates[main.id] = { start: finalMainStart, end: finalMainEnd, duration: totalDur };
+      currentPointer = addDays(finalMainEnd, 1);
     }
   });
 
@@ -210,7 +236,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     }
   };
 
-  // Helper to update baseline start date and auto-calculate duration / end date
+  // Helper to update baseline start date and auto-calculate duration / end date / shift subtasks
   const handleBaselineStartChange = (scope: ScopeType, newStartDateStr: string) => {
     if (!newStartDateStr) {
       handleUpdate(scope.id, 'baselineStartDate', '');
@@ -235,12 +261,60 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       newEndDateStr = format(calculatedEnd, 'yyyy-MM-dd');
     }
 
+    // If main task with subtasks, shift subtasks sequentially
+    const subScopes = projectScopes.filter(s => s.parentId === scope.id);
+    const updatedSubMap: Record<string, { baselineStartDate: string; baselineEndDate: string }> = {};
+
+    if (subScopes.length > 0) {
+      let subCurrentStart = newStart;
+      subScopes.forEach(sub => {
+        const subDur = Math.max(1, sub.durationDays || 1);
+        const subEnd = addDays(subCurrentStart, subDur - 1);
+        updatedSubMap[sub.id] = {
+          baselineStartDate: format(subCurrentStart, 'yyyy-MM-dd'),
+          baselineEndDate: format(subEnd, 'yyyy-MM-dd')
+        };
+        subCurrentStart = addDays(subEnd, 1);
+      });
+      const totalSubDur = subScopes.reduce((sum, s) => sum + (s.durationDays || 1), 0);
+      newDuration = totalSubDur;
+      newEndDateStr = format(addDays(newStart, Math.max(1, totalSubDur) - 1), 'yyyy-MM-dd');
+    }
+
+    // If subtask, sync parent main task dates
+    const parentUpdateMap: Record<string, { baselineStartDate: string; baselineEndDate: string }> = {};
+    if (scope.parentId) {
+      const parent = projectScopes.find(s => s.id === scope.parentId);
+      if (parent) {
+        const siblingSubs = projectScopes.filter(s => s.parentId === parent.id).map(s => {
+          if (s.id === scope.id) {
+            return { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr };
+          }
+          return s;
+        });
+        const subStarts = siblingSubs.map(s => s.baselineStartDate).filter(Boolean).sort();
+        const subEnds = siblingSubs.map(s => s.baselineEndDate).filter(Boolean).sort();
+        if (subStarts.length > 0) {
+          const earliestStart = subStarts[0];
+          const latestEnd = subEnds.length > 0 ? subEnds[subEnds.length - 1] : earliestStart;
+          parentUpdateMap[parent.id] = { baselineStartDate: earliestStart, baselineEndDate: latestEnd };
+        }
+      }
+    }
+
     updateData({
-      scopes: data.scopes.map(s => 
-        s.id === scope.id 
-          ? { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr, durationDays: newDuration }
-          : s
-      )
+      scopes: data.scopes.map(s => {
+        if (s.id === scope.id) {
+          return { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr, durationDays: newDuration };
+        }
+        if (updatedSubMap[s.id]) {
+          return { ...s, ...updatedSubMap[s.id] };
+        }
+        if (parentUpdateMap[s.id]) {
+          return { ...s, ...parentUpdateMap[s.id] };
+        }
+        return s;
+      })
     });
   };
 
@@ -265,12 +339,37 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       newDuration = 1;
     }
 
+    // If subtask, sync parent main task dates
+    const parentUpdateMap: Record<string, { baselineStartDate: string; baselineEndDate: string }> = {};
+    if (scope.parentId) {
+      const parent = projectScopes.find(s => s.id === scope.parentId);
+      if (parent) {
+        const siblingSubs = projectScopes.filter(s => s.parentId === parent.id).map(s => {
+          if (s.id === scope.id) {
+            return { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr };
+          }
+          return s;
+        });
+        const subStarts = siblingSubs.map(s => s.baselineStartDate).filter(Boolean).sort();
+        const subEnds = siblingSubs.map(s => s.baselineEndDate).filter(Boolean).sort();
+        if (subStarts.length > 0) {
+          const earliestStart = subStarts[0];
+          const latestEnd = subEnds.length > 0 ? subEnds[subEnds.length - 1] : earliestStart;
+          parentUpdateMap[parent.id] = { baselineStartDate: earliestStart, baselineEndDate: latestEnd };
+        }
+      }
+    }
+
     updateData({
-      scopes: data.scopes.map(s => 
-        s.id === scope.id 
-          ? { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr, durationDays: newDuration }
-          : s
-      )
+      scopes: data.scopes.map(s => {
+        if (s.id === scope.id) {
+          return { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr, durationDays: newDuration };
+        }
+        if (parentUpdateMap[s.id]) {
+          return { ...s, ...parentUpdateMap[s.id] };
+        }
+        return s;
+      })
     });
   };
 
@@ -486,8 +585,104 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     });
   };
 
+  // Quick Action Helpers for Actual Dates
+  const handleSetStartToday = (scope: ScopeType) => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    handleUpdate(scope.id, 'actualStartDate', todayStr);
+  };
+
+  const handleSetFinishToday = (scope: ScopeType) => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    updateData({
+      scopes: data.scopes.map(s => {
+        if (s.id !== scope.id) return s;
+        return {
+          ...s,
+          actualEndDate: todayStr,
+          actualStartDate: s.actualStartDate || todayStr,
+          progress: 100
+        };
+      })
+    });
+  };
+
+  // Batch Import Scopes into Schedule Plan
+  const handleBatchImportScopes = (scopeNamesToImport: string[], parentId: string) => {
+    if (!scopeNamesToImport || scopeNamesToImport.length === 0) return;
+
+    const newScopes: ScopeType[] = scopeNamesToImport.map((name, idx) => ({
+      id: uuidv4(),
+      projectId,
+      parentId: parentId === 'new_main' ? undefined : parentId,
+      taskName: name.trim(),
+      order: projectScopes.length + idx,
+      durationDays: 1,
+      progress: 0,
+    }));
+
+    updateData({ scopes: [...data.scopes, ...newScopes] });
+    setShowScopePickerModal(false);
+    setSelectedScopeNames([]);
+  };
+
   const exportPDF = () => {
     window.print();
+  };
+
+  const exportPDFWithJsPDF = async () => {
+    if (!reportRef.current) {
+      window.print();
+      return;
+    }
+    
+    setIsExportingPdf(true);
+    try {
+      const element = reportRef.current;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+      const imgData = canvas.toDataURL('image/png');
+
+      const isA3 = paperSize === 'a3';
+      const isLandscape = pdfOrientation === 'landscape';
+
+      const pdf = new jsPDF({
+        orientation: isLandscape ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: isA3 ? 'a3' : 'a4'
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      const margin = 8;
+      const imgWidth = pdfWidth - (margin * 2);
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = margin;
+
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+      heightLeft -= (pdfHeight - (margin * 2));
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + margin;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+        heightLeft -= (pdfHeight - (margin * 2));
+      }
+
+      const safeProjName = (project?.name || 'Project').replace(/[^a-zA-Z0-9ก-๙_-]/g, '_');
+      pdf.save(`Schedule_Plan_${safeProjName}_${paperSize.toUpperCase()}_${format(new Date(), 'yyyyMMdd')}.pdf`);
+    } catch (err) {
+      console.error('PDF generation error, falling back to window.print()', err);
+      window.print();
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   return (
@@ -624,7 +819,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
               />
               <button
                 onClick={handleAddTask}
-                className="px-4 py-1.5 bg-[#0061FF] text-white rounded text-sm font-semibold hover:bg-blue-700 flex items-center gap-1.5 flex-shrink-0"
+                className="px-3.5 py-1.5 bg-[#0061FF] text-white rounded text-sm font-semibold hover:bg-blue-700 flex items-center gap-1.5 flex-shrink-0 shadow-xs"
               >
                 <Plus className="w-4 h-4" />
                 <span>
@@ -632,6 +827,15 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                     ? (lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task')
                     : (lang === 'th' ? 'เพิ่มงานหลัก' : 'Add Main Task')}
                 </span>
+              </button>
+
+              <button
+                onClick={() => setShowScopePickerModal(true)}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded text-xs font-bold flex items-center gap-1.5 flex-shrink-0 shadow-xs border border-emerald-500/30"
+                title={lang === 'th' ? 'เลือกขอบเขตงานหรือรายการ BOQ เข้ามาเป็น Task' : 'Import Scope of Work or BOQ Items as Tasks'}
+              >
+                <ListPlus className="w-4 h-4 text-emerald-200" />
+                <span>{lang === 'th' ? 'เลือกขอบเขตงาน' : 'Pick Scopes'}</span>
               </button>
             </div>
           </div>
@@ -649,47 +853,60 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
             {/* Paper Size */}
             <div className="flex items-center gap-1.5">
-              <span className="text-slate-500">{lang === 'th' ? 'กระดาษ:' : 'Paper:'}</span>
+              <span className="text-slate-500 font-medium">{lang === 'th' ? 'ขนาดกระดาษ:' : 'Paper Size:'}</span>
               <select
                 value={paperSize}
                 onChange={(e) => setPaperSize(e.target.value as 'a4' | 'a3')}
-                className="border border-slate-300 rounded px-2 py-0.5 bg-white font-medium text-slate-700 outline-none focus:border-[#0061FF]"
+                className="border border-slate-300 rounded px-2 py-1 bg-white font-bold text-slate-800 outline-none focus:border-[#0061FF]"
               >
-                <option value="a4">{lang === 'th' ? 'A4 แนวนอน' : 'A4 Landscape'}</option>
-                <option value="a3">{lang === 'th' ? 'A3 แนวนอน' : 'A3 Landscape'}</option>
+                <option value="a4">{lang === 'th' ? 'กระดาษ A4' : 'A4 Paper'}</option>
+                <option value="a3">{lang === 'th' ? 'กระดาษ A3 (แผ่นใหญ่)' : 'A3 Paper (Large Format)'}</option>
+              </select>
+            </div>
+
+            {/* Paper Orientation */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500 font-medium">{lang === 'th' ? 'แนว:' : 'Orientation:'}</span>
+              <select
+                value={pdfOrientation}
+                onChange={(e) => setPdfOrientation(e.target.value as 'landscape' | 'portrait')}
+                className="border border-slate-300 rounded px-2 py-1 bg-white font-bold text-slate-800 outline-none focus:border-[#0061FF]"
+              >
+                <option value="landscape">{lang === 'th' ? 'แนวนอน (Landscape)' : 'Landscape'}</option>
+                <option value="portrait">{lang === 'th' ? 'แนวตั้ง (Portrait)' : 'Portrait'}</option>
               </select>
             </div>
 
             {/* Export Content Mode */}
             <div className="flex items-center gap-1.5">
-              <span className="text-slate-500">{lang === 'th' ? 'เนื้อหา:' : 'Content:'}</span>
+              <span className="text-slate-500 font-medium">{lang === 'th' ? 'เนื้อหา:' : 'Content:'}</span>
               <select
                 value={pdfIncludeMode}
                 onChange={(e) => setPdfIncludeMode(e.target.value as 'both' | 'table' | 'gantt')}
-                className="border border-slate-300 rounded px-2 py-0.5 bg-white font-medium text-slate-700 outline-none focus:border-[#0061FF]"
+                className="border border-slate-300 rounded px-2 py-1 bg-white font-semibold text-slate-700 outline-none focus:border-[#0061FF]"
               >
-                <option value="both">{lang === 'th' ? 'ตาราง + แกนต์ชาร์ต' : 'Table + Gantt'}</option>
+                <option value="both">{lang === 'th' ? 'ตารางข้อมูล + แกนต์ชาร์ต' : 'Table + Gantt'}</option>
                 <option value="table">{lang === 'th' ? 'เฉพาะตารางข้อมูล' : 'Table Only'}</option>
                 <option value="gantt">{lang === 'th' ? 'เฉพาะแกนต์ชาร์ต' : 'Gantt Only'}</option>
               </select>
             </div>
 
             {/* Signatures Toggle */}
-            <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+            <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-semibold bg-white px-2 py-1 rounded border border-slate-200 hover:bg-slate-50">
               <input
                 type="checkbox"
                 checked={pdfIncludeSignatures}
                 onChange={(e) => setPdfIncludeSignatures(e.target.checked)}
                 className="rounded border-slate-300 text-[#0061FF] focus:ring-0"
               />
-              <span>{lang === 'th' ? 'แสดงส่วนลงนาม' : 'Include Signatures'}</span>
+              <span>{lang === 'th' ? 'แสดงส่วนลงนาม 3 ฝ่าย' : 'Include Signatures'}</span>
             </label>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowPdfPreview(!showPdfPreview)}
-              className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
+              className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
                 showPdfPreview 
                   ? 'bg-blue-50 border-blue-300 text-blue-700' 
                   : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
@@ -702,11 +919,31 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
             </button>
 
             <button
+              onClick={exportPDFWithJsPDF}
+              disabled={isExportingPdf}
+              className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded text-xs font-bold hover:opacity-90 flex items-center gap-1.5 transition-all shadow-xs border border-blue-700 disabled:opacity-50"
+              title={lang === 'th' ? `ส่งออกเป็นไฟล์ PDF (${paperSize.toUpperCase()})` : `Export PDF (${paperSize.toUpperCase()})`}
+            >
+              {isExportingPdf ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>{lang === 'th' ? 'กำลังสร้าง PDF...' : 'Generating PDF...'}</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{lang === 'th' ? `ดาวน์โหลด PDF (${paperSize.toUpperCase()})` : `Download PDF (${paperSize.toUpperCase()})`}</span>
+                </>
+              )}
+            </button>
+
+            <button
               onClick={exportPDF}
-              className="px-3.5 py-1 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 flex items-center gap-1.5 transition-colors shadow-sm"
+              className="px-3 py-1.5 bg-slate-700 text-white rounded text-xs font-semibold hover:bg-slate-800 flex items-center gap-1.5 transition-colors"
+              title={lang === 'th' ? 'สั่งพิมพ์ผ่านเครื่องพิมพ์ของระบบ' : 'Print directly'}
             >
               <Printer className="w-3.5 h-3.5" />
-              {lang === 'th' ? 'พิมพ์ / ส่งออก PDF' : 'Print / Export PDF'}
+              <span>{lang === 'th' ? 'พิมพ์' : 'Print'}</span>
             </button>
           </div>
         </div>
@@ -833,73 +1070,56 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                           )}
                         </td>
                         <td className="p-2 text-center bg-blue-50/30">
-                          {hasSubs ? (
-                            <div className="flex flex-col items-center">
-                              <span className="text-slate-800 font-medium">
-                                {main.baselineStartDate && isValid(parseISO(main.baselineStartDate)) ? format(parseISO(main.baselineStartDate), 'dd/MM/yyyy') : format(mainDates.start, 'dd/MM/yyyy')}
+                          <div className="flex flex-col items-center gap-0.5">
+                            <input
+                              type="date"
+                              value={main.baselineStartDate || ''}
+                              onChange={(e) => handleBaselineStartChange(main, e.target.value)}
+                              className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
+                              title={hasSubs ? (lang === 'th' ? 'กำหนดวันเริ่มงานหลัก (จะปรับวันของงานย่อยให้อัตโนมัติ)' : 'Set main task start date (auto shifts subtasks)') : undefined}
+                            />
+                            {!main.baselineStartDate ? (
+                              <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded font-medium border border-blue-200" title={lang === 'th' ? 'คำนวณจากวันที่เริ่มโครงการ' : 'Calculated from project start date'}>
+                                {lang === 'th' ? 'อ้างอิง:' : 'Ref:'} {format(mainDates.start, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`})
                               </span>
-                              <span className="text-[10px] text-blue-600 font-semibold">{lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`}</span>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center gap-0.5">
-                              <input
-                                type="date"
-                                value={main.baselineStartDate || ''}
-                                onChange={(e) => handleBaselineStartChange(main, e.target.value)}
-                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
-                              />
-                              {!main.baselineStartDate ? (
-                                <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded font-medium border border-amber-200">
-                                  {lang === 'th' ? 'ยังไม่ระบุวันที่' : 'Date Pending'} ({lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`})
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-blue-600 font-semibold">
+                                  {format(parseISO(main.baselineStartDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`})
                                 </span>
-                              ) : (
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[10px] text-blue-600 font-semibold">
-                                    {format(parseISO(main.baselineStartDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`})
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      handleUpdate(main.id, 'baselineStartDate', '');
-                                      handleUpdate(main.id, 'baselineEndDate', '');
-                                    }}
-                                    className="text-[9px] text-red-500 hover:underline font-bold"
-                                    title={lang === 'th' ? 'ลบวันที่' : 'Clear date'}
-                                  >
-                                    {lang === 'th' ? 'ลบ' : 'Clear'}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleUpdate(main.id, 'baselineStartDate', '');
+                                    handleUpdate(main.id, 'baselineEndDate', '');
+                                  }}
+                                  className="text-[9px] text-red-500 hover:underline font-bold"
+                                  title={lang === 'th' ? 'ลบวันที่' : 'Clear date'}
+                                >
+                                  {lang === 'th' ? 'ลบ' : 'Clear'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2 text-center bg-blue-50/30 border-r border-slate-200">
-                          {hasSubs ? (
-                            <div className="flex flex-col items-center">
-                              <span className="text-slate-800 font-medium">
-                                {main.baselineEndDate && isValid(parseISO(main.baselineEndDate)) ? format(parseISO(main.baselineEndDate), 'dd/MM/yyyy') : format(mainDates.end, 'dd/MM/yyyy')}
+                          <div className="flex flex-col items-center gap-0.5">
+                            <input
+                              type="date"
+                              value={main.baselineEndDate || ''}
+                              onChange={(e) => handleBaselineEndChange(main, e.target.value)}
+                              className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
+                            />
+                            {!main.baselineEndDate ? (
+                              <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded font-medium border border-blue-200" title={lang === 'th' ? 'คำนวณจากวันที่เริ่มโครงการ' : 'Calculated from project start date'}>
+                                {lang === 'th' ? 'อ้างอิง:' : 'Ref:'} {format(mainDates.end, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`})
                               </span>
-                              <span className="text-[10px] text-blue-600 font-semibold">{lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`}</span>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center gap-0.5">
-                              <input
-                                type="date"
-                                value={main.baselineEndDate || ''}
-                                onChange={(e) => handleBaselineEndChange(main, e.target.value)}
-                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
-                              />
-                              {!main.baselineEndDate ? (
-                                <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded font-medium border border-amber-200">
-                                  {lang === 'th' ? 'ยังไม่ระบุวันที่' : 'Date Pending'} ({lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`})
-                                </span>
-                              ) : (
-                                <span className="text-[10px] text-blue-600 font-semibold">
-                                  {format(parseISO(main.baselineEndDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`})
-                                </span>
-                              )}
-                            </div>
-                          )}
+                            ) : (
+                              <span className="text-[10px] text-blue-600 font-semibold">
+                                {format(parseISO(main.baselineEndDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`})
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Actual */}
@@ -1051,8 +1271,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                                   className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
                                 />
                                 {!sub.baselineStartDate ? (
-                                  <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded font-medium border border-amber-200">
-                                    {lang === 'th' ? 'ยังไม่ระบุวันที่' : 'Date Pending'} ({lang === 'th' ? `วันที่ ${sStartDayNum}` : `Day ${sStartDayNum}`})
+                                  <span className="text-[10px] text-blue-700 bg-blue-50 px-1 py-0.5 rounded font-medium border border-blue-200" title={lang === 'th' ? 'คำนวณจากวันที่เริ่มโครงการ' : 'Calculated from project start date'}>
+                                    {lang === 'th' ? 'อ้างอิง:' : 'Ref:'} {format(subDates.start, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sStartDayNum}` : `Day ${sStartDayNum}`})
                                   </span>
                                 ) : (
                                   <div className="flex items-center gap-1">
@@ -1083,8 +1303,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                                   className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
                                 />
                                 {!sub.baselineEndDate ? (
-                                  <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded font-medium border border-amber-200">
-                                    {lang === 'th' ? 'ยังไม่ระบุวันที่' : 'Date Pending'} ({lang === 'th' ? `วันที่ ${sEndDayNum}` : `Day ${sEndDayNum}`})
+                                  <span className="text-[10px] text-blue-700 bg-blue-50 px-1 py-0.5 rounded font-medium border border-blue-200" title={lang === 'th' ? 'คำนวณจากวันที่เริ่มโครงการ' : 'Calculated from project start date'}>
+                                    {lang === 'th' ? 'อ้างอิง:' : 'Ref:'} {format(subDates.end, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sEndDayNum}` : `Day ${sEndDayNum}`})
                                   </span>
                                 ) : (
                                   <span className="text-[10px] text-blue-600 font-medium">
@@ -1694,6 +1914,120 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
           getItemProgress={getItemProgress}
         />
       </div>
+
+      {/* Scope Picker / Import Modal */}
+      {showScopePickerModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 print:hidden">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700">
+                  <ListPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">
+                    {lang === 'th' ? 'เลือก/นำเข้าขอบเขตงานเข้ามาเป็น Task' : 'Pick / Import Scope Items as Tasks'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {lang === 'th' ? 'เลือกหัวข้อขอบเขตงานหรือกรอกรายการใหม่ เพื่อจัดเข้าเป็นแผนงานโครงการ' : 'Select scope items or type custom items to import into the schedule plan.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowScopePickerModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold px-2 py-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Template Standard Presets */}
+            <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  {lang === 'th' ? 'แม่แบบขอบเขตงานมาตรฐาน (5 หมวดหลัก)' : 'Standard Scope Template (5 Main Categories)'}
+                </span>
+                <button
+                  onClick={() => {
+                    const presetList = [
+                      '1. งานเตรียมพื้นที่และงานอำนวยการ',
+                      '2. งานฐานรากและโครงสร้างอาคาร',
+                      '3. งานสถาปัตยกรรมและตกแต่ง',
+                      '4. งานระบบไฟฟ้าและสื่อสาร',
+                      '5. งานระบบสุขาภิบาลและส่งมอบ'
+                    ];
+                    handleBatchImportScopes(presetList, importTargetParentId);
+                  }}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold transition-colors shadow-xs"
+                >
+                  {lang === 'th' ? '+ นำเข้า 5 หมวดมาตรฐานทันที' : '+ Import 5 Standard Categories'}
+                </button>
+              </div>
+            </div>
+
+            {/* Import Target Selection */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">
+                {lang === 'th' ? 'นำเข้าโดยกำหนดให้เป็น:' : 'Import Target Position:'}
+              </label>
+              <select
+                value={importTargetParentId}
+                onChange={(e) => setImportTargetParentId(e.target.value)}
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-medium text-slate-800 focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="new_main">{lang === 'th' ? '📌 สร้างเป็น "งานหลัก" ใหม่ (Main Tasks)' : '📌 Create as New "Main Tasks"'}</option>
+                {mainScopes.map((m, idx) => (
+                  <option key={m.id} value={m.id}>
+                    ↳ {lang === 'th' ? `สร้างเป็น "งานย่อย" ใต้: ${idx + 1}. ${m.taskName}` : `Sub-task under: ${idx + 1}. ${m.taskName}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Custom Multi-line Import */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                <span>{lang === 'th' ? 'พิมพ์รายการขอบเขตงานที่ต้องการนำเข้า (บรรทัดละ 1 รายการ):' : 'Type scope items to import (1 item per line):'}</span>
+              </label>
+              <textarea
+                value={customScopeInput}
+                onChange={(e) => setCustomScopeInput(e.target.value)}
+                placeholder={lang === 'th' ? 'เช่น:\n- งานติดตั้งระบบตู้ควบคุมไฟฟ้า\n- งานเดินสายไฟและติดตั้งดวงโคม\n- งานทดสอบระบบและส่งมอบ' : 'e.g.:\n- Electrical cabinet installation\n- Wiring & lighting installation\n- System testing & handover'}
+                className="w-full h-28 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500 font-mono bg-slate-50"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+              <button
+                onClick={() => setShowScopePickerModal(false)}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
+              >
+                {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+              </button>
+              <button
+                onClick={() => {
+                  const items = customScopeInput
+                    .split('\n')
+                    .map(line => line.trim().replace(/^[-•*]\s*/, ''))
+                    .filter(line => line.length > 0);
+                  if (items.length > 0) {
+                    handleBatchImportScopes(items, importTargetParentId);
+                    setCustomScopeInput('');
+                  } else {
+                    alert(lang === 'th' ? 'กรุณากรอกรายการขอบเขตงานอย่างน้อย 1 บรรทัด' : 'Please enter at least 1 scope item');
+                  }
+                }}
+                disabled={!customScopeInput.trim()}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              >
+                <Check className="w-4 h-4" />
+                <span>{lang === 'th' ? 'นำเข้าขอบเขตงานที่กรอก' : 'Import Entered Scopes'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PDF Modal Preview on Screen */}
       {showPdfPreview && (
