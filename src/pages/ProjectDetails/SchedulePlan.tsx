@@ -43,7 +43,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
   // Scope Selection Modal States
   const [showScopePickerModal, setShowScopePickerModal] = useState<boolean>(false);
-  const [selectedScopeNames, setSelectedScopeNames] = useState<string[]>([]);
+  const [activeScopeTab, setActiveScopeTab] = useState<'defined' | 'templates' | 'custom'>('defined');
+  const [selectedScopeCheckboxes, setSelectedScopeCheckboxes] = useState<string[]>([]);
   const [customScopeInput, setCustomScopeInput] = useState<string>('');
   const [importTargetParentId, setImportTargetParentId] = useState<string>('new_main');
 
@@ -622,7 +623,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
     updateData({ scopes: [...data.scopes, ...newScopes] });
     setShowScopePickerModal(false);
-    setSelectedScopeNames([]);
+    setSelectedScopeCheckboxes([]);
+    setCustomScopeInput('');
   };
 
   const exportPDF = () => {
@@ -1918,65 +1920,83 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       {/* Scope Picker / Import Modal */}
       {showScopePickerModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 print:hidden">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-3xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
                   <ListPlus className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-800 text-base">
-                    {lang === 'th' ? 'เลือก/นำเข้าขอบเขตงานเข้ามาเป็น Task' : 'Pick / Import Scope Items as Tasks'}
+                    {lang === 'th' ? 'เลือกขอบเขตงานเข้ามาเป็น Task' : 'Pick Scope of Work as Tasks'}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    {lang === 'th' ? 'เลือกหัวข้อขอบเขตงานหรือกรอกรายการใหม่ เพื่อจัดเข้าเป็นแผนงานโครงการ' : 'Select scope items or type custom items to import into the schedule plan.'}
+                    {lang === 'th' ? 'เลือกจากรายการขอบเขตงานโครงการ ชุดแม่แบบมาตรฐาน หรือพิมพ์เพิ่มเอง' : 'Select from defined project scopes, industry templates, or custom input'}
                   </p>
                 </div>
               </div>
               <button
-                onClick={() => setShowScopePickerModal(false)}
+                onClick={() => {
+                  setShowScopePickerModal(false);
+                  setSelectedScopeCheckboxes([]);
+                }}
                 className="text-slate-400 hover:text-slate-600 text-lg font-bold px-2 py-1"
               >
                 ✕
               </button>
             </div>
 
-            {/* Template Standard Presets */}
-            <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-2">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-500" />
-                  {lang === 'th' ? 'แม่แบบขอบเขตงานมาตรฐาน (5 หมวดหลัก)' : 'Standard Scope Template (5 Main Categories)'}
-                </span>
-                <button
-                  onClick={() => {
-                    const presetList = [
-                      '1. งานเตรียมพื้นที่และงานอำนวยการ',
-                      '2. งานฐานรากและโครงสร้างอาคาร',
-                      '3. งานสถาปัตยกรรมและตกแต่ง',
-                      '4. งานระบบไฟฟ้าและสื่อสาร',
-                      '5. งานระบบสุขาภิบาลและส่งมอบ'
-                    ];
-                    handleBatchImportScopes(presetList, importTargetParentId);
-                  }}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold transition-colors shadow-xs"
-                >
-                  {lang === 'th' ? '+ นำเข้า 5 หมวดมาตรฐานทันที' : '+ Import 5 Standard Categories'}
-                </button>
-              </div>
+            {/* Navigation Tabs */}
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-2 shrink-0">
+              <button
+                onClick={() => setActiveScopeTab('defined')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                  activeScopeTab === 'defined'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                <span>{lang === 'th' ? `ขอบเขตงานในโครงการ (${projectScopes.length})` : `Project Scopes (${projectScopes.length})`}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveScopeTab('templates')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                  activeScopeTab === 'templates'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{lang === 'th' ? 'ชุดแม่แบบงานมาตรฐาน' : 'Standard Industry Templates'}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveScopeTab('custom')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                  activeScopeTab === 'custom'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>{lang === 'th' ? 'พิมพ์รายการเพิ่มเอง' : 'Custom Input'}</span>
+              </button>
             </div>
 
-            {/* Import Target Selection */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">
-                {lang === 'th' ? 'นำเข้าโดยกำหนดให้เป็น:' : 'Import Target Position:'}
-              </label>
+            {/* Target Import Location */}
+            <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex items-center gap-2 shrink-0">
+              <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                {lang === 'th' ? 'ตำแหน่งที่ต้องการนำเข้า:' : 'Import Target Position:'}
+              </span>
               <select
                 value={importTargetParentId}
                 onChange={(e) => setImportTargetParentId(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-medium text-slate-800 focus:ring-1 focus:ring-blue-500"
+                className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white font-bold text-slate-800 focus:ring-1 focus:ring-emerald-500"
               >
-                <option value="new_main">{lang === 'th' ? '📌 สร้างเป็น "งานหลัก" ใหม่ (Main Tasks)' : '📌 Create as New "Main Tasks"'}</option>
+                <option value="new_main">{lang === 'th' ? '📌 สร้างเป็น "งานหลัก" ใหม่ (Main Task)' : '📌 Create as New Main Task'}</option>
                 {mainScopes.map((m, idx) => (
                   <option key={m.id} value={m.id}>
                     ↳ {lang === 'th' ? `สร้างเป็น "งานย่อย" ใต้: ${idx + 1}. ${m.taskName}` : `Sub-task under: ${idx + 1}. ${m.taskName}`}
@@ -1985,45 +2005,270 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
               </select>
             </div>
 
-            {/* Custom Multi-line Import */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                <span>{lang === 'th' ? 'พิมพ์รายการขอบเขตงานที่ต้องการนำเข้า (บรรทัดละ 1 รายการ):' : 'Type scope items to import (1 item per line):'}</span>
-              </label>
-              <textarea
-                value={customScopeInput}
-                onChange={(e) => setCustomScopeInput(e.target.value)}
-                placeholder={lang === 'th' ? 'เช่น:\n- งานติดตั้งระบบตู้ควบคุมไฟฟ้า\n- งานเดินสายไฟและติดตั้งดวงโคม\n- งานทดสอบระบบและส่งมอบ' : 'e.g.:\n- Electrical cabinet installation\n- Wiring & lighting installation\n- System testing & handover'}
-                className="w-full h-28 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-blue-500 font-mono bg-slate-50"
-              />
+            {/* Tab Body */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-[220px]">
+              {/* TAB 1: Defined Project Scopes */}
+              {activeScopeTab === 'defined' && (
+                <div className="space-y-3">
+                  {projectScopes.length === 0 ? (
+                    <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 rounded-lg space-y-2">
+                      <p className="text-xs font-medium text-slate-500">
+                        {lang === 'th' ? 'ยังไม่มีรายการขอบเขตงานที่บันทึกไว้ในเมนูกำหนดขอบเขตงาน' : 'No defined scope items found in this project yet.'}
+                      </p>
+                      <button
+                        onClick={() => setActiveScopeTab('templates')}
+                        className="text-xs text-emerald-600 font-bold hover:underline"
+                      >
+                        {lang === 'th' ? '👉 คลิกที่นี่เพื่อเลือกจากชุดแม่แบบงานมาตรฐาน' : '👉 Click here to select from standard templates'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between bg-slate-100 p-2 rounded text-xs font-semibold text-slate-700">
+                        <span>{lang === 'th' ? 'รายการขอบเขตงานทั้งหมดในโครงการ:' : 'All Project Scope Items:'}</span>
+                        <button
+                          onClick={() => {
+                            const allNames = projectScopes.map(s => s.taskName);
+                            if (selectedScopeCheckboxes.length === allNames.length) {
+                              setSelectedScopeCheckboxes([]);
+                            } else {
+                              setSelectedScopeCheckboxes(allNames);
+                            }
+                          }}
+                          className="text-emerald-700 hover:underline font-bold text-[11px]"
+                        >
+                          {selectedScopeCheckboxes.length === projectScopes.length
+                            ? (lang === 'th' ? 'ยกเลิกการเลือกทั้งหมด' : 'Deselect All')
+                            : (lang === 'th' ? 'เลือกทั้งหมด' : 'Select All')}
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-1.5 max-h-[280px] overflow-y-auto border border-slate-200 p-2 rounded-lg bg-white">
+                        {projectScopes.map((scope) => {
+                          const isChecked = selectedScopeCheckboxes.includes(scope.taskName);
+                          const isSub = !!scope.parentId;
+                          return (
+                            <label
+                              key={scope.id}
+                              className={`flex items-center gap-2 p-2 rounded cursor-pointer border text-xs transition-colors ${
+                                isChecked ? 'bg-emerald-50 border-emerald-300 font-bold text-slate-900' : 'bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100'
+                              } ${isSub ? 'ml-4 border-l-2 border-l-blue-400' : ''}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedScopeCheckboxes([...selectedScopeCheckboxes, scope.taskName]);
+                                  } else {
+                                    setSelectedScopeCheckboxes(selectedScopeCheckboxes.filter(n => n !== scope.taskName));
+                                  }
+                                }}
+                                className="rounded text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span className="flex-1">
+                                {isSub ? '↳ ' : ''}{scope.taskName}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-medium">
+                                {isSub ? (lang === 'th' ? 'งานย่อย' : 'Sub-task') : (lang === 'th' ? 'งานหลัก' : 'Main Task')}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: Standard Templates */}
+              {activeScopeTab === 'templates' && (
+                <div className="space-y-3">
+                  {[
+                    {
+                      cat: lang === 'th' ? '1. งานโยธาและโครงสร้างอาคาร' : '1. Civil & Structural Works',
+                      items: [
+                        'งานจัดเตรียมพื้นที่และสิ่งอำนวยความสะดวกชั่วคราว',
+                        'งานตอกเสาเข็ม/เสาเข็มเจาะ และฐานราก',
+                        'งานโครงสร้าง ค.ส.ล. (เสา, คาน, พื้น)',
+                        'งานโครงสร้างเหล็กรูปพรรณและหลังคา'
+                      ]
+                    },
+                    {
+                      cat: lang === 'th' ? '2. งานระบบไฟฟ้าและสื่อสาร' : '2. Electrical & Communication',
+                      items: [
+                        'งานติดตั้งตู้เมนสวิตช์ MDB และตู้ย่อย DB',
+                        'งานเดินท่อร้อยสายไฟฟ้าและสายเมน',
+                        'งานติดตั้งดวงโคม โคมไฟ และสวิตช์เต้ารับ',
+                        'งานติดตั้งระบบแจ้งเหตุเพลิงไหม้ (Fire Alarm)',
+                        'งานติดตั้งระบบสื่อสาร สัญญาณทีวี และ LAN'
+                      ]
+                    },
+                    {
+                      cat: lang === 'th' ? '3. งานระบบสุขาภิบาลและส่งมอบ' : '3. Sanitary & Water Supply',
+                      items: [
+                        'งานระบบท่อน้ำดี (PPR/Galvanized) และน้ำเสีย (PVC)',
+                        'งานติดตั้งถังเก็บน้ำ ถังดักไขมัน และปั๊มน้ำ',
+                        'งานติดตั้งสุขภัณฑ์และอุปกรณ์ห้องน้ำ'
+                      ]
+                    },
+                    {
+                      cat: lang === 'th' ? '4. งานระบบปรับอากาศ (HVAC)' : '4. Air Conditioning (HVAC)',
+                      items: [
+                        'งานติดตั้งเครื่องปรับอากาศชนิด Split Type / VRV',
+                        'งานเดินท่อน้ำยา ท่อน้ำทิ้ง และท่อลมระบายอากาศ'
+                      ]
+                    },
+                    {
+                      cat: lang === 'th' ? '5. งานสถาปัตยกรรมและตกแต่ง' : '5. Architectural & Interior',
+                      items: [
+                        'งานก่ออิฐฉาบปูนและแต่งผิว',
+                        'งานติดตั้งฝ้าเพดานยิปซัม / แผ่นเรียบ',
+                        'งานปูกระเบื้องพื้นและผนัง',
+                        'งานทาสีน้ำอะคริลิกภายในและภายนอก',
+                        'งานติดตั้งประตู หน้าต่าง และกระจก'
+                      ]
+                    },
+                    {
+                      cat: lang === 'th' ? '6. งานติดตั้งระบบโซลาร์เซลล์ (Solar PV)' : '6. Solar PV System',
+                      items: [
+                        'งานสำรวจโครงสร้างและติดตั้งระบบ Mounting',
+                        'งานติดตั้งแผงโซลาร์เซลล์ (Solar Panels)',
+                        'งานติดตั้งอินเวอร์เตอร์ ตู้ DC/AC Combiner',
+                        'งานเชื่อมต่อระบบไฟฟ้าและทดสอบระบบ (Commissioning)'
+                      ]
+                    }
+                  ].map((group, gIdx) => (
+                    <div key={gIdx} className="border border-slate-200 rounded-lg p-2.5 bg-slate-50/50 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-800 border-b border-slate-200 pb-1">
+                        <span>{group.cat}</span>
+                        <button
+                          onClick={() => {
+                            const newCheck = Array.from(new Set([...selectedScopeCheckboxes, ...group.items]));
+                            setSelectedScopeCheckboxes(newCheck);
+                          }}
+                          className="text-[11px] text-emerald-700 hover:underline"
+                        >
+                          {lang === 'th' ? '+ เลือกหมวดนี้ทั้งหมด' : '+ Select Category'}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-1 pt-1">
+                        {group.items.map((item, iIdx) => {
+                          const isChecked = selectedScopeCheckboxes.includes(item);
+                          return (
+                            <label
+                              key={iIdx}
+                              className={`flex items-center gap-2 p-1.5 rounded cursor-pointer text-xs border ${
+                                isChecked ? 'bg-emerald-50 border-emerald-300 font-bold text-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedScopeCheckboxes([...selectedScopeCheckboxes, item]);
+                                  } else {
+                                    setSelectedScopeCheckboxes(selectedScopeCheckboxes.filter(n => n !== item));
+                                  }
+                                }}
+                                className="rounded text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span className="flex-1 truncate">{item}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* TAB 3: Custom Input */}
+              {activeScopeTab === 'custom' && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span>{lang === 'th' ? 'พิมพ์รายการขอบเขตงานที่ต้องการนำเข้า (บรรทัดละ 1 รายการ):' : 'Type scope items to import (1 item per line):'}</span>
+                  </label>
+                  <textarea
+                    value={customScopeInput}
+                    onChange={(e) => setCustomScopeInput(e.target.value)}
+                    placeholder={lang === 'th' ? 'เช่น:\n- งานติดตั้งระบบตู้ควบคุมไฟฟ้า\n- งานเดินสายไฟและติดตั้งดวงโคม\n- งานทดสอบระบบและส่งมอบ' : 'e.g.:\n- Electrical cabinet installation\n- Wiring & lighting installation\n- System testing & handover'}
+                    className="w-full h-36 px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-emerald-500 font-mono bg-slate-50"
+                  />
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
-              <button
-                onClick={() => setShowScopePickerModal(false)}
-                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
-              >
-                {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
-              </button>
-              <button
-                onClick={() => {
-                  const items = customScopeInput
-                    .split('\n')
-                    .map(line => line.trim().replace(/^[-•*]\s*/, ''))
-                    .filter(line => line.length > 0);
-                  if (items.length > 0) {
-                    handleBatchImportScopes(items, importTargetParentId);
-                    setCustomScopeInput('');
-                  } else {
-                    alert(lang === 'th' ? 'กรุณากรอกรายการขอบเขตงานอย่างน้อย 1 บรรทัด' : 'Please enter at least 1 scope item');
-                  }
-                }}
-                disabled={!customScopeInput.trim()}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm"
-              >
-                <Check className="w-4 h-4" />
-                <span>{lang === 'th' ? 'นำเข้าขอบเขตงานที่กรอก' : 'Import Entered Scopes'}</span>
-              </button>
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between border-t border-slate-200 pt-3 shrink-0">
+              <div className="text-xs font-bold text-slate-700">
+                {activeScopeTab === 'custom' ? (
+                  <span>
+                    {lang === 'th' 
+                      ? `เตรียมนำเข้า: ${customScopeInput.split('\n').filter(l => l.trim()).length} รายการ`
+                      : `Custom Items: ${customScopeInput.split('\n').filter(l => l.trim()).length}`}
+                  </span>
+                ) : (
+                  <span>
+                    {lang === 'th' 
+                      ? `เลือกแล้ว: ${selectedScopeCheckboxes.length} รายการ`
+                      : `Selected: ${selectedScopeCheckboxes.length} items`}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setShowScopePickerModal(false);
+                    setSelectedScopeCheckboxes([]);
+                  }}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50"
+                >
+                  {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+                </button>
+
+                {activeScopeTab === 'custom' ? (
+                  <button
+                    onClick={() => {
+                      const items = customScopeInput
+                        .split('\n')
+                        .map(line => line.trim().replace(/^[-•*]\s*/, ''))
+                        .filter(line => line.length > 0);
+                      if (items.length > 0) {
+                        handleBatchImportScopes(items, importTargetParentId);
+                      } else {
+                        alert(lang === 'th' ? 'กรุณากรอกรายการขอบเขตงานอย่างน้อย 1 บรรทัด' : 'Please enter at least 1 scope item');
+                      }
+                    }}
+                    disabled={!customScopeInput.trim()}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{lang === 'th' ? 'นำเข้าขอบเขตงานที่พิมพ์' : 'Import Typed Items'}</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (selectedScopeCheckboxes.length > 0) {
+                        handleBatchImportScopes(selectedScopeCheckboxes, importTargetParentId);
+                      } else {
+                        alert(lang === 'th' ? 'กรุณาทำเครื่องหมายเลือกขอบเขตงานอย่างน้อย 1 รายการ' : 'Please select at least 1 scope item');
+                      }
+                    }}
+                    disabled={selectedScopeCheckboxes.length === 0}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>
+                      {lang === 'th'
+                        ? `นำเข้า ${selectedScopeCheckboxes.length} รายการที่เลือก`
+                        : `Import ${selectedScopeCheckboxes.length} Selected`}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
