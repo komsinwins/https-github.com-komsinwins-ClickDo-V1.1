@@ -5,6 +5,16 @@ import { db } from './lib/firebase';
 
 const STORAGE_KEY = 'clickdo_v1_data';
 
+export const DEFAULT_CONTACT_ROLES = [
+  { id: 'role-1', name: 'Project Manager (ผู้จัดการโครงการ)' },
+  { id: 'role-2', name: 'Site Engineer (วิศวกรสนาม)' },
+  { id: 'role-3', name: 'Foreman (โฟร์แมน)' },
+  { id: 'role-4', name: 'Safety Officer (จป.วิชาชีพ)' },
+  { id: 'role-5', name: 'Client Representative (ตัวแทนผู้ว่าจ้าง)' },
+  { id: 'role-6', name: 'Technician/Worker (ช่างเทคนิค/ผู้ปฏิบัติงาน)' },
+  { id: 'role-7', name: 'Other (อื่นๆ)' },
+];
+
 const initialState: AppState = {
   language: 'th',
   projectStatuses: [
@@ -18,8 +28,10 @@ const initialState: AppState = {
   salespersons: [],
   projectManagers: [],
   contractorMaster: [],
+  contactRoles: DEFAULT_CONTACT_ROLES,
   projects: [],
   scopes: [],
+  scheduleTasks: [],
   contractors: [],
   workers: [],
   vehicles: [],
@@ -32,7 +44,14 @@ export const getAppData = (): AppState => {
   const data = localStorage.getItem(STORAGE_KEY);
   if (data) {
     try {
-      return { ...initialState, ...JSON.parse(data) };
+      const parsed = JSON.parse(data);
+      if (!parsed.contactRoles || parsed.contactRoles.length === 0) {
+        parsed.contactRoles = DEFAULT_CONTACT_ROLES;
+      }
+      if (!parsed.scheduleTasks) {
+        parsed.scheduleTasks = [];
+      }
+      return { ...initialState, ...parsed };
     } catch (e) {
       console.error('Failed to parse app data', e);
     }
@@ -68,6 +87,12 @@ export const useAppStore = create<StoreState>((set) => ({
 onSnapshot(doc(db, 'appData', 'main'), (docSnap) => {
   if (docSnap.exists()) {
     const firebaseData = docSnap.data() as AppState;
+    if (!firebaseData.contactRoles || firebaseData.contactRoles.length === 0) {
+      firebaseData.contactRoles = DEFAULT_CONTACT_ROLES;
+    }
+    if (!firebaseData.scheduleTasks) {
+      firebaseData.scheduleTasks = [];
+    }
     useAppStore.setState({ data: { ...initialState, ...firebaseData }, isFirebaseLoaded: true });
     // Also update local storage
     localStorage.setItem(STORAGE_KEY, JSON.stringify(firebaseData));

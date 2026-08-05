@@ -8,7 +8,7 @@ import { SaveButton } from '../components/SaveButton';
 export function MasterData() {
   const { data, updateData } = useAppStore();
   const lang = data.language || 'th';
-  const [activeTab, setActiveTab] = useState<'customers' | 'owners' | 'salespersons' | 'projectManagers' | 'contractorMaster' | 'projectStatuses'>('customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'owners' | 'salespersons' | 'projectManagers' | 'contractorMaster' | 'projectStatuses' | 'contactRoles'>('customers');
   const [newItemName, setNewItemName] = useState('');
   const [statusColor, setStatusColor] = useState('#0061FF');
   const [contractorForm, setContractorForm] = useState({
@@ -59,11 +59,21 @@ export function MasterData() {
     }
 
     const list = data[activeTab] || [];
+    const oldItem = list.find((item: any) => item.id === editingId);
     const updatedList = list.map((item: any) =>
       item.id === editingId ? { ...item, ...editForm } : item
     );
 
-    updateData({ [activeTab]: updatedList });
+    const updates: any = { [activeTab]: updatedList };
+
+    if (activeTab === 'contactRoles' && oldItem && 'name' in oldItem && (oldItem as any).name !== editForm.name) {
+      const updatedContacts = (data.contacts || []).map((c: any) =>
+        c.role === (oldItem as any).name ? { ...c, role: editForm.name.trim() } : c
+      );
+      updates.contacts = updatedContacts;
+    }
+
+    updateData(updates);
     setEditingId(null);
     setEditForm({});
   };
@@ -181,6 +191,7 @@ export function MasterData() {
     { id: 'projectManagers', label: lang === 'th' ? 'ผู้จัดการโครงการ' : 'Project Managers' },
     { id: 'contractorMaster', label: lang === 'th' ? 'ผู้รับเหมา' : 'Contractors' },
     { id: 'projectStatuses', label: lang === 'th' ? 'สถานะโครงการ' : 'Project Statuses' },
+    { id: 'contactRoles', label: lang === 'th' ? 'บทบาทผู้ติดต่อ' : 'Contact Roles' },
   ];
 
   return (

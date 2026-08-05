@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
 import { differenceInDays, parseISO, isValid, addDays, format, min, max } from 'date-fns';
-import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer, Zap, Calculator, Sparkles, Users, AlertTriangle, CalendarX, CheckCircle2, ListPlus, Check, Calendar, ArrowRight, FileSpreadsheet, Loader2, Edit3 } from 'lucide-react';
+import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer, Zap, Calculator, Sparkles, Users, AlertTriangle, CalendarX, CheckCircle2, ListPlus, Check, Calendar, ArrowRight, FileSpreadsheet, Loader2, Edit3, ChevronUp, ChevronDown, ArrowUp, ArrowDown, Layers } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ScopeOfWork as ScopeType } from '../../types';
 import { SaveButton } from '../../components/SaveButton';
@@ -17,6 +17,16 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   const [ganttNewTaskName, setGanttNewTaskName] = useState('');
   const [ganttNewTaskDuration, setGanttNewTaskDuration] = useState<number>(1);
   
+  // Insert Task & Reorder States
+  const [insertState, setInsertState] = useState<{
+    targetId: string;
+    position: 'above' | 'below';
+    isSub: boolean;
+    parentId?: string;
+  } | null>(null);
+  const [insertTaskName, setInsertTaskName] = useState<string>('');
+  const [activeInsertMenuId, setActiveInsertMenuId] = useState<string | null>(null);
+  
   // Pre-Work Assessment States
   const [preWorkManpower, setPreWorkManpower] = useState<number>(4);
   const [preWorkRiskLevel, setPreWorkRiskLevel] = useState<'low' | 'medium' | 'high'>('medium');
@@ -25,11 +35,49 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   const lang = data.language || 'th';
   const project = data.projects.find(p => p.id === projectId);
   
-  const projectScopes = data.scopes
+  // Master Scope of Work items defined in Scope of Work tab
+  const masterProjectScopes = data.scopes
     .filter(s => s.projectId === projectId)
     .sort((a, b) => (a.order || 0) - (b.order || 0));
 
+  // Check if project has dedicated scheduleTasks
+  const hasScheduleTasks = Boolean(data.scheduleTasks && data.scheduleTasks.some(s => s.projectId === projectId));
+  const rawScheduleTasks = hasScheduleTasks
+    ? (data.scheduleTasks?.filter(s => s.projectId === projectId) || [])
+    : masterProjectScopes;
+
+  const projectScopes = [...rawScheduleTasks].sort((a, b) => (a.order || 0) - (b.order || 0));
   const mainScopes = projectScopes.filter(s => !s.parentId);
+
+  const saveScheduleTasks = (updatedProjectScheduleTasks: ScopeType[]) => {
+    const otherProjectsScheduleTasks = (data.scheduleTasks || []).filter(s => s.projectId !== projectId);
+    const normalized = updatedProjectScheduleTasks.map((s, idx) => ({
+      ...s,
+      order: s.order !== undefined ? s.order : idx,
+    }));
+    updateData({
+      scheduleTasks: [...otherProjectsScheduleTasks, ...normalized]
+    });
+  };
+
+  const handleBatchImportScopes = (taskNames: string[], targetParentId: string) => {
+    if (taskNames.length === 0) return;
+
+    const newTasks: ScopeType[] = taskNames.map((name, idx) => ({
+      id: uuidv4(),
+      projectId,
+      parentId: targetParentId === 'new_main' ? undefined : targetParentId,
+      taskName: name,
+      order: projectScopes.length + idx,
+      durationDays: 1,
+      progress: 0,
+    }));
+
+    saveScheduleTasks([...projectScopes, ...newTasks]);
+    setShowScopePickerModal(false);
+    setSelectedScopeCheckboxes([]);
+    setCustomScopeInput('');
+  };
 
   const [paperSize, setPaperSize] = useState<'a4' | 'a3'>('a4');
   const [pdfOrientation, setPdfOrientation] = useState<'landscape' | 'portrait'>('landscape');
@@ -212,38 +260,36 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   };
 
   const handleUpdate = (id: string, field: string, value: any) => {
-    updateData({
-      scopes: data.scopes.map(s => {
-        if (s.id !== id) return s;
-        const updated = { ...s, [field]: value };
-        // Auto-calculate progress when actual dates are updated
-        if (field === 'actualEndDate' && value) {
-          const actEnd = parseISO(value);
-          if (isValid(actEnd) && new Date() >= actEnd) {
-            updated.progress = 100;
-          }
-        } else if (field === 'actualStartDate' && value && (!s.progress || s.progress === 0)) {
-          const actStart = parseISO(value);
-          if (isValid(actStart)) {
-            updated.progress = calculateProgressFromDates(updated);
-          }
+    const updated = projectScopes.map(s => {
+      if (s.id !== id) return s;
+      const updatedItem = { ...s, [field]: value };
+      // Auto-calculate progress when actual dates are updated
+      if (field === 'actualEndDate' && value) {
+        const actEnd = parseISO(value);
+        if (isValid(actEnd) && new Date() >= actEnd) {
+          updatedItem.progress = 100;
         }
-        return updated;
-      })
+      } else if (field === 'actualStartDate' && value && (!s.progress || s.progress === 0)) {
+        const actStart = parseISO(value);
+        if (isValid(actStart)) {
+          updatedItem.progress = calculateProgressFromDates(updatedItem);
+        }
+      }
+      return updatedItem;
     });
+    saveScheduleTasks(updated);
   };
 
   // Helper to auto-calculate progress for all leaf scopes in this project
   const handleAutoCalculateAllProgress = () => {
-    const updatedScopes = data.scopes.map(scope => {
-      if (scope.projectId !== projectId) return scope;
-      const subScopes = data.scopes.filter(s => s.parentId === scope.id && s.projectId === projectId);
+    const updatedScopes = projectScopes.map(scope => {
+      const subScopes = projectScopes.filter(s => s.parentId === scope.id);
       if (subScopes.length > 0) return scope; // parent scope calculated automatically
       const computedProg = calculateProgressFromDates(scope);
       return { ...scope, progress: computedProg };
     });
 
-    updateData({ scopes: updatedScopes });
+    saveScheduleTasks(updatedScopes);
   };
 
   // Helper to auto-calculate progress for a single leaf scope
@@ -347,8 +393,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       }
     }
 
-    updateData({
-      scopes: data.scopes.map(s => {
+    saveScheduleTasks(
+      projectScopes.map(s => {
         if (s.id === scope.id) {
           return { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr, durationDays: newDuration };
         }
@@ -360,7 +406,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
         }
         return s;
       })
-    });
+    );
   };
 
   // Helper to update baseline end date and auto-calculate duration
@@ -405,8 +451,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       }
     }
 
-    updateData({
-      scopes: data.scopes.map(s => {
+    saveScheduleTasks(
+      projectScopes.map(s => {
         if (s.id === scope.id) {
           return { ...s, baselineStartDate: newStartDateStr, baselineEndDate: newEndDateStr, durationDays: newDuration };
         }
@@ -415,7 +461,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
         }
         return s;
       })
-    });
+    );
   };
 
   // Helper to update duration and auto-calculate baseline end date
@@ -429,13 +475,13 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       newEndDateStr = format(calculatedEnd, 'yyyy-MM-dd');
     }
 
-    updateData({
-      scopes: data.scopes.map(s => 
+    saveScheduleTasks(
+      projectScopes.map(s => 
         s.id === scope.id 
           ? { ...s, durationDays: dur, baselineEndDate: newEndDateStr }
           : s
       )
-    });
+    );
   };
 
   // Calculate progress for a task (auto-calculates parent progress if subtasks exist)
@@ -492,7 +538,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
         durationDays: 1,
         progress: 0,
       };
-      updateData({ scopes: [...data.scopes, subScope] });
+      saveScheduleTasks([...projectScopes, subScope]);
       setNewTask('');
     } else {
       const newScope: ScopeType = {
@@ -503,7 +549,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
         durationDays: 1,
         progress: 0,
       };
-      updateData({ scopes: [...data.scopes, newScope] });
+      saveScheduleTasks([...projectScopes, newScope]);
       setNewTask('');
     }
   };
@@ -518,7 +564,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       durationDays: 1,
       progress: 0,
     };
-    updateData({ scopes: [...data.scopes, newScope] });
+    saveScheduleTasks([...projectScopes, newScope]);
     setNewTask('');
   };
 
@@ -532,7 +578,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       durationDays: Math.max(1, ganttNewTaskDuration || 1),
       progress: 0,
     };
-    updateData({ scopes: [...data.scopes, newScope] });
+    saveScheduleTasks([...projectScopes, newScope]);
     setGanttNewTaskName('');
     setGanttNewTaskDuration(1);
   };
@@ -544,14 +590,13 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     if (preWorkRiskLevel === 'high') multiplier *= 1.1;
     if (preWorkRiskLevel === 'low') multiplier *= 0.95;
 
-    const updatedScopes = data.scopes.map(s => {
-      if (s.projectId !== projectId) return s;
+    const updatedScopes = projectScopes.map(s => {
       const baseDur = s.durationDays || 1;
       const newDur = Math.max(1, Math.round(baseDur * multiplier));
       return { ...s, durationDays: newDur };
     });
 
-    updateData({ scopes: updatedScopes });
+    saveScheduleTasks(updatedScopes);
   };
 
   const handleAutoSyncProjectDates = () => {
@@ -591,8 +636,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       }
     });
 
-    const updatedScopes = data.scopes.map(s => {
-      if (s.projectId !== projectId) return s;
+    const updatedScopes = projectScopes.map(s => {
       if (updatedScopesMap[s.id]) {
         return {
           ...s,
@@ -603,7 +647,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       return s;
     });
 
-    updateData({ scopes: updatedScopes });
+    saveScheduleTasks(updatedScopes);
   };
 
   const handleAddSub = (parentId: string) => {
@@ -618,16 +662,206 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       durationDays: 1,
       progress: 0,
     };
-    updateData({ scopes: [...data.scopes, subScope] });
+    saveScheduleTasks([...projectScopes, subScope]);
     setSubTaskInputs({ ...subTaskInputs, [parentId]: '' });
     setShowSubInput({ ...showSubInput, [parentId]: false });
   };
 
   const handleDelete = (id: string) => {
     if (!window.confirm(lang === 'th' ? 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?' : 'Are you sure you want to delete this item?')) return;
-    updateData({
-      scopes: data.scopes.filter(s => s.id !== id && s.parentId !== id)
+    saveScheduleTasks(projectScopes.filter(s => s.id !== id && s.parentId !== id));
+  };
+
+  // Reorder Scopes Helper
+  const handleReorderScopes = (newOrderedScopes: ScopeType[]) => {
+    saveScheduleTasks(newOrderedScopes);
+  };
+
+  // Move Main Task Up or Down
+  const handleMoveMainTask = (mainId: string, direction: 'up' | 'down') => {
+    const idx = mainScopes.findIndex(m => m.id === mainId);
+    if (idx === -1) return;
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === mainScopes.length - 1) return;
+
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    const newMainScopes = [...mainScopes];
+    const temp = newMainScopes[idx];
+    newMainScopes[idx] = newMainScopes[targetIdx];
+    newMainScopes[targetIdx] = temp;
+
+    const reordered: ScopeType[] = [];
+    newMainScopes.forEach(m => {
+      reordered.push(m);
+      const subs = projectScopes.filter(s => s.parentId === m.id);
+      reordered.push(...subs);
     });
+
+    handleReorderScopes(reordered);
+  };
+
+  // Move Sub Task Up or Down
+  const handleMoveSubTask = (subId: string, parentId: string, direction: 'up' | 'down') => {
+    const subScopes = projectScopes.filter(s => s.parentId === parentId);
+    const idx = subScopes.findIndex(s => s.id === subId);
+    if (idx === -1) return;
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx === subScopes.length - 1) return;
+
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    const newSubScopes = [...subScopes];
+    const temp = newSubScopes[idx];
+    newSubScopes[idx] = newSubScopes[targetIdx];
+    newSubScopes[targetIdx] = temp;
+
+    const reordered: ScopeType[] = [];
+    mainScopes.forEach(m => {
+      reordered.push(m);
+      if (m.id === parentId) {
+        reordered.push(...newSubScopes);
+      } else {
+        const subs = projectScopes.filter(s => s.parentId === m.id);
+        reordered.push(...subs);
+      }
+    });
+
+    handleReorderScopes(reordered);
+  };
+
+  // Confirm Insertion of Task Above or Below
+  const handleConfirmInsert = () => {
+    if (!insertState || !insertTaskName.trim()) return;
+
+    const newScope: ScopeType = {
+      id: uuidv4(),
+      projectId,
+      parentId: insertState.isSub ? insertState.parentId : undefined,
+      taskName: insertTaskName.trim(),
+      durationDays: 1,
+      progress: 0,
+    };
+
+    const reordered: ScopeType[] = [];
+
+    if (!insertState.isSub) {
+      // Inserting Main Task
+      if (mainScopes.length === 0) {
+        reordered.push(newScope);
+      } else {
+        mainScopes.forEach(m => {
+          if (m.id === insertState.targetId && insertState.position === 'above') {
+            reordered.push(newScope);
+          }
+          reordered.push(m);
+          const subs = projectScopes.filter(s => s.parentId === m.id);
+          reordered.push(...subs);
+          if (m.id === insertState.targetId && insertState.position === 'below') {
+            reordered.push(newScope);
+          }
+        });
+      }
+    } else {
+      // Inserting Sub Task
+      mainScopes.forEach(m => {
+        reordered.push(m);
+        const subs = projectScopes.filter(s => s.parentId === m.id);
+
+        if (m.id === insertState.parentId) {
+          if (subs.length === 0) {
+            reordered.push(newScope);
+          } else {
+            subs.forEach(s => {
+              if (s.id === insertState.targetId && insertState.position === 'above') {
+                reordered.push(newScope);
+              }
+              reordered.push(s);
+              if (s.id === insertState.targetId && insertState.position === 'below') {
+                reordered.push(newScope);
+              }
+            });
+          }
+        } else {
+          reordered.push(...subs);
+        }
+      });
+    }
+
+    handleReorderScopes(reordered);
+    setInsertState(null);
+    setInsertTaskName('');
+  };
+
+  // Render Inline Insertion Row
+  const renderInlineInsertRow = (
+    targetId: string,
+    position: 'above' | 'below',
+    isSub: boolean,
+    parentId?: string,
+    labelPrefix?: string
+  ) => {
+    if (
+      !insertState ||
+      insertState.targetId !== targetId ||
+      insertState.position !== position ||
+      insertState.isSub !== isSub
+    ) {
+      return null;
+    }
+
+    return (
+      <tr key={`insert-${targetId}-${position}`} className="bg-amber-50/90 border-2 border-amber-400">
+        <td className="p-2 text-center text-xs font-bold text-amber-700">
+          📍
+        </td>
+        <td className="p-2" colSpan={8}>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <span className="text-xs font-bold text-amber-800 whitespace-nowrap flex items-center gap-1">
+              <Plus className="w-3.5 h-3.5 text-amber-600" />
+              {isSub
+                ? (lang === 'th' ? `แทรกงานย่อย (${position === 'above' ? 'ด้านบน' : 'ด้านล่าง'})` : `Insert Sub-Task (${position})`)
+                : (lang === 'th' ? `แทรกงานหลัก (${position === 'above' ? 'ด้านบน' : 'ด้านล่าง'})` : `Insert Main Task (${position})`)}
+              {labelPrefix ? `: ${labelPrefix}` : ''}
+            </span>
+            <input
+              type="text"
+              value={insertTaskName}
+              onChange={(e) => setInsertTaskName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirmInsert();
+                if (e.key === 'Escape') setInsertState(null);
+              }}
+              placeholder={
+                isSub
+                  ? (lang === 'th' ? 'กรอกชื่อหัวข้องานย่อยที่ต้องการแทรกแล้วกด Enter...' : 'Enter sub-task name & press Enter...')
+                  : (lang === 'th' ? 'กรอกชื่อหัวข้องานหลักที่ต้องการแทรกแล้วกด Enter...' : 'Enter main task name & press Enter...')
+              }
+              className="flex-1 min-w-[200px] px-3 py-1 text-xs border border-amber-400 rounded bg-white font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={handleConfirmInsert}
+              disabled={!insertTaskName.trim()}
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-50 flex items-center gap-1 shrink-0 shadow-xs"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>{lang === 'th' ? 'แทรกงานนี้' : 'Confirm Insert'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setInsertState(null);
+                setInsertTaskName('');
+              }}
+              className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-200/80 hover:bg-slate-300 rounded shrink-0"
+            >
+              {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+            </button>
+          </div>
+        </td>
+        <td className="p-2"></td>
+      </tr>
+    );
   };
 
   // Quick Action Helpers for Actual Dates
@@ -638,37 +872,16 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
   const handleSetFinishToday = (scope: ScopeType) => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    updateData({
-      scopes: data.scopes.map(s => {
-        if (s.id !== scope.id) return s;
-        return {
-          ...s,
-          actualEndDate: todayStr,
-          actualStartDate: s.actualStartDate || todayStr,
-          progress: 100
-        };
-      })
+    const updated = projectScopes.map(s => {
+      if (s.id !== scope.id) return s;
+      return {
+        ...s,
+        actualEndDate: todayStr,
+        actualStartDate: s.actualStartDate || todayStr,
+        progress: 100
+      };
     });
-  };
-
-  // Batch Import Scopes into Schedule Plan
-  const handleBatchImportScopes = (scopeNamesToImport: string[], parentId: string) => {
-    if (!scopeNamesToImport || scopeNamesToImport.length === 0) return;
-
-    const newScopes: ScopeType[] = scopeNamesToImport.map((name, idx) => ({
-      id: uuidv4(),
-      projectId,
-      parentId: parentId === 'new_main' ? undefined : parentId,
-      taskName: name.trim(),
-      order: projectScopes.length + idx,
-      durationDays: 1,
-      progress: 0,
-    }));
-
-    updateData({ scopes: [...data.scopes, ...newScopes] });
-    setShowScopePickerModal(false);
-    setSelectedScopeCheckboxes([]);
-    setCustomScopeInput('');
+    saveScheduleTasks(updated);
   };
 
   const exportPDF = () => {
@@ -757,63 +970,6 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
         }
       `}</style>
 
-      {/* Project Schedule Reference & Auto Sync Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white p-3.5 sm:p-4 rounded-xl shadow-md border border-blue-800/80 print:hidden mb-1">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-600/30 rounded-lg border border-blue-400/30 shrink-0">
-              <Clock className="w-5 h-5 text-blue-300" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400">
-                  {lang === 'th' ? 'กรอบเวลาอ้างอิงจากข้อมูลโครงการ' : 'Project Contract Reference Timeline'}
-                </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/30 text-blue-200 border border-blue-400/30">
-                  {project.name}
-                </span>
-              </div>
-              <div className="flex items-center gap-4 flex-wrap mt-1 text-xs font-semibold text-slate-200">
-                <span>
-                  {lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start:'}{' '}
-                  <strong className="text-white font-mono bg-white/10 px-1.5 py-0.5 rounded">{format(projectStartDate, 'dd/MM/yyyy')}</strong>
-                </span>
-                <span>
-                  {lang === 'th' ? 'วันที่สิ้นสุดโครงการ:' : 'End:'}{' '}
-                  <strong className="text-white font-mono bg-white/10 px-1.5 py-0.5 rounded">{format(projectEndDate, 'dd/MM/yyyy')}</strong>
-                </span>
-                <span className="text-amber-300 font-bold bg-amber-500/20 px-2 py-0.5 rounded border border-amber-400/30">
-                  {lang === 'th' ? `ระยะเวลาตามสัญญา: ${projectContractDuration} วัน` : `Contract Duration: ${projectContractDuration} days`}
-                </span>
-                <span className="text-emerald-300 font-bold bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-400/30">
-                  {lang === 'th' ? `ขอบเขตงานรวม: ${totalProjectPlannedDuration} วัน` : `Total Tasks Sum: ${totalProjectPlannedDuration} days`}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <button
-              onClick={handleOpenProjectEditModal}
-              className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg shadow-sm border border-slate-600 flex items-center justify-center gap-2 transition-all active:scale-95"
-              title={lang === 'th' ? 'แก้ไขข้อมูลหลักของโครงการ เช่น ชื่อโครงการ, สถานที่, เลขที่สัญญา, วันที่เริ่ม/สิ้นสุด' : 'Edit main project info like name, location, PO, dates'}
-            >
-              <Edit3 className="w-4 h-4 text-emerald-400" />
-              <span>{lang === 'th' ? 'แก้ไขข้อมูลหลักโครงการ' : 'Edit Project Main Info'}</span>
-            </button>
-
-            <button
-              onClick={handleAutoSyncProjectDates}
-              className="px-4 py-2.5 bg-[#0061FF] hover:bg-blue-600 text-white text-xs font-bold rounded-lg shadow-sm border border-blue-400/40 flex items-center justify-center gap-2 transition-all shrink-0 active:scale-95"
-              title={lang === 'th' ? 'คำนวณและอ้างอิงแจกแจงวันที่แผนงานของทุกขอบเขตงานเรียงต่อกันตามวันที่เริ่มโครงการ' : 'Auto-calculate timeline start and end dates based on project start date'}
-            >
-              <Zap className="w-4 h-4 text-amber-300" />
-              <span>{lang === 'th' ? 'อ้างอิงและคำนวณวันที่จากโครงการ' : 'Auto-Sync Dates from Project'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Controls Header */}
       <div className="flex flex-col space-y-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm print:hidden">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -825,14 +981,14 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                 className={`flex-1 sm:flex-none flex justify-center items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded transition-colors ${view === 'table' ? 'bg-white shadow-xs text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 <TableIcon className="w-4 h-4" />
-                {lang === 'th' ? '1. ตารางประเมินและแผนงาน' : '1. Schedule Plan Table'}
+                {lang === 'th' ? '1. ตารางแผนการดำเนินงาน' : '1. Execution Plan Table'}
               </button>
               <button
                 onClick={() => setView('gantt')}
                 className={`flex-1 sm:flex-none flex justify-center items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded transition-colors ${view === 'gantt' ? 'bg-white shadow-xs text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 <Calculator className="w-4 h-4 text-indigo-600" />
-                {lang === 'th' ? '2. ประเมินการเข้าทำงาน & Gantt' : '2. Pre-Work Assessment & Gantt'}
+                {lang === 'th' ? '2. แผนภาพ Gantt' : '2. Gantt Chart'}
               </button>
             </div>
             
@@ -897,7 +1053,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
             </div>
           </div>
 
-          <SaveButton successMessage={lang === 'th' ? 'บันทึกแผนงานเรียบร้อยแล้ว' : 'Schedule plan saved successfully'} />
+          <SaveButton successMessage={lang === 'th' ? 'บันทึกแผนการดำเนินงานเรียบร้อยแล้ว' : 'Execution plan saved successfully'} />
         </div>
 
         {/* PDF Export Config Sub-Bar */}
@@ -1009,7 +1165,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       <div className="overflow-x-auto border border-slate-200 rounded-lg bg-white p-4 shadow-sm" ref={reportRef}>
         <div className="mb-4 pb-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="text-center md:text-left">
-            <h3 className="text-xl font-bold text-slate-800">{lang === 'th' ? 'ตารางประเมินและประเมินระยะเวลาการทำงาน (Schedule Plan)' : 'Schedule & Duration Estimation Plan'}</h3>
+            <h3 className="text-xl font-bold text-slate-800">{lang === 'th' ? 'แผนการดำเนินงาน (Execution & Operational Plan)' : 'Execution & Operational Plan'}</h3>
             <p className="text-xs text-slate-500 mt-1">{project.name} | {lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start Date:'} {format(projectStartDate, 'dd/MM/yyyy')}</p>
           </div>
 
@@ -1045,8 +1201,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
               <tr>
                 <th className="p-2 font-semibold w-12 text-center">{lang === 'th' ? 'ลำดับ' : 'No.'}</th>
                 <th className="p-2 font-semibold border-r border-slate-200 w-1/3">{lang === 'th' ? 'ขอบเขตงาน / หัวข้อย่อย' : 'Scope / Sub-topic'}</th>
-                <th className="p-2 font-semibold text-center border-r border-slate-200" colSpan={3}>{lang === 'th' ? 'แผนงาน (Baseline)' : 'Baseline'}</th>
-                <th className="p-2 font-semibold text-center border-r border-slate-200" colSpan={3}>{lang === 'th' ? 'ผลจริง (Actual)' : 'Actual'}</th>
+                <th className="p-2 font-semibold text-center border-r border-slate-200" colSpan={3}>{lang === 'th' ? 'แผนการดำเนินงาน (Baseline)' : 'Baseline Plan'}</th>
+                <th className="p-2 font-semibold text-center border-r border-slate-200" colSpan={3}>{lang === 'th' ? 'ผลการดำเนินงานจริง (Actual)' : 'Actual Performance'}</th>
                 <th className="p-2 font-semibold text-center border-r border-slate-200 w-20">{lang === 'th' ? 'น้ำหนัก (%)' : 'Weight (%)'}</th>
                 <th className="p-2 font-semibold text-center border-r border-slate-200 w-28">{lang === 'th' ? '% คืบหน้า' : '% Progress'}</th>
                 <th className="p-2 font-semibold text-center w-20">{lang === 'th' ? 'จัดการ' : 'Action'}</th>
@@ -1088,6 +1244,9 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
                   return (
                     <React.Fragment key={main.id}>
+                      {/* Inline Insertion Row ABOVE Main Task */}
+                      {renderInlineInsertRow(main.id, 'above', false, undefined, main.taskName)}
+
                       {/* Main Task Row */}
                       <tr className="hover:bg-slate-50 bg-slate-100/70 font-semibold text-slate-900 border-t-2 border-slate-200">
                         <td className="p-2 text-center text-slate-800">{mainIdx + 1}</td>
@@ -1255,14 +1414,85 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                         {/* Actions */}
                         <td className="p-2 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => setShowSubInput({ ...showSubInput, [main.id]: !showSubInput[main.id] })}
-                              className="p-1 text-xs bg-blue-50 text-[#0061FF] hover:bg-blue-100 rounded font-semibold flex items-center gap-0.5"
-                              title={lang === 'th' ? 'แทรกหัวข้อย่อย' : 'Add Sub-topic'}
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span className="text-[10px]">{lang === 'th' ? 'ย่อย' : 'Sub'}</span>
-                            </button>
+                            {/* Reorder Up/Down */}
+                            <div className="flex items-center bg-white border border-slate-200 rounded p-0.5 shadow-2xs">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveMainTask(main.id, 'up')}
+                                disabled={mainIdx === 0}
+                                className="p-1 hover:bg-slate-100 text-slate-700 disabled:opacity-20 disabled:hover:bg-transparent rounded transition-colors"
+                                title={lang === 'th' ? 'เลื่อนขึ้น (สลับลำดับงานหลัก)' : 'Move Up'}
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveMainTask(main.id, 'down')}
+                                disabled={mainIdx === mainScopes.length - 1}
+                                className="p-1 hover:bg-slate-100 text-slate-700 disabled:opacity-20 disabled:hover:bg-transparent rounded transition-colors"
+                                title={lang === 'th' ? 'เลื่อนลง (สลับลำดับงานหลัก)' : 'Move Down'}
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Insert Menu */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setActiveInsertMenuId(activeInsertMenuId === main.id ? null : main.id)}
+                                className="p-1 px-1.5 text-xs bg-blue-50 text-[#0061FF] hover:bg-blue-100 rounded font-bold flex items-center gap-0.5 border border-blue-200"
+                                title={lang === 'th' ? 'แทรกงานหลัก หรือแทรกงานย่อย' : 'Insert Task Options'}
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span className="text-[10px]">{lang === 'th' ? 'แทรก' : 'Insert'}</span>
+                              </button>
+
+                              {activeInsertMenuId === main.id && (
+                                <>
+                                  <div className="fixed inset-0 z-20" onClick={() => setActiveInsertMenuId(null)} />
+                                  <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-200 z-30 p-1 space-y-0.5 text-left text-xs font-semibold">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setInsertState({ targetId: main.id, position: 'above', isSub: false });
+                                        setInsertTaskName('');
+                                        setActiveInsertMenuId(null);
+                                      }}
+                                      className="w-full text-left px-2.5 py-1.5 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded flex items-center gap-1.5"
+                                    >
+                                      <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
+                                      <span>{lang === 'th' ? 'แทรกงานหลักด้านบน' : 'Insert Main Task Above'}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setInsertState({ targetId: main.id, position: 'below', isSub: false });
+                                        setInsertTaskName('');
+                                        setActiveInsertMenuId(null);
+                                      }}
+                                      className="w-full text-left px-2.5 py-1.5 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded flex items-center gap-1.5"
+                                    >
+                                      <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                                      <span>{lang === 'th' ? 'แทรกงานหลักด้านล่าง' : 'Insert Main Task Below'}</span>
+                                    </button>
+                                    <div className="border-t border-slate-100 my-0.5" />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setShowSubInput({ ...showSubInput, [main.id]: true });
+                                        setActiveInsertMenuId(null);
+                                      }}
+                                      className="w-full text-left px-2.5 py-1.5 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded flex items-center gap-1.5"
+                                    >
+                                      <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>{lang === 'th' ? 'เพิ่มงานย่อยในหัวข้อนี้' : 'Add Sub-Task Under This'}</span>
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
                             <button
                               onClick={() => handleDelete(main.id)}
                               className="p-1 text-red-500 hover:bg-red-50 rounded"
@@ -1286,161 +1516,238 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                         }
 
                         return (
-                          <tr key={sub.id} className="hover:bg-slate-50/80 bg-white text-slate-700">
-                            <td className="p-2 text-center text-slate-500 text-[10px] pl-4">{mainIdx + 1}.{subIdx + 1}</td>
-                            <td className="p-2 pl-6 border-r border-slate-200">
-                              <div className="flex items-center gap-1.5">
-                                <CornerDownRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                                <input
-                                  type="text"
-                                  value={sub.taskName}
-                                  onChange={(e) => handleUpdate(sub.id, 'taskName', e.target.value)}
-                                  className="w-full border-transparent border-b border-b-slate-200 focus:border-[#0061FF] focus:outline-none p-1 bg-transparent text-slate-800"
-                                />
-                              </div>
-                              <div className="text-[10px] text-slate-500 font-normal flex items-center gap-1 pl-5 mt-0.5">
-                                <span>
-                                  {format(subDates.start, 'dd/MM/yyyy')} - {format(subDates.end, 'dd/MM/yyyy')}
-                                  <span className="text-[#0061FF] font-semibold ml-1">
-                                    ({lang === 'th' ? `วันที่ ${sStartDayNum} - ${sEndDayNum}` : `Day ${sStartDayNum} - ${sEndDayNum}`})
-                                  </span>
-                                </span>
-                              </div>
-                            </td>
+                          <React.Fragment key={sub.id}>
+                            {/* Inline Insertion Row ABOVE Sub Task */}
+                            {renderInlineInsertRow(sub.id, 'above', true, main.id, sub.taskName)}
 
-                            {/* Baseline Sub-task */}
-                            <td className="p-2 text-center bg-blue-50/10">
-                              <input
-                                type="number"
-                                min="1"
-                                value={sub.durationDays || 1}
-                                onChange={(e) => handleDurationChange(sub, parseInt(e.target.value) || 1)}
-                                className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs"
-                                title={lang === 'th' ? 'กำหนดระยะเวลา (วัน)' : 'Set duration'}
-                              />
-                            </td>
-                            <td className="p-2 text-center bg-blue-50/10">
-                              <div className="flex flex-col items-center gap-0.5">
+                            <tr className="hover:bg-slate-50/80 bg-white text-slate-700">
+                              <td className="p-2 text-center text-slate-500 text-[10px] pl-4">{mainIdx + 1}.{subIdx + 1}</td>
+                              <td className="p-2 pl-6 border-r border-slate-200">
+                                <div className="flex items-center gap-1.5">
+                                  <CornerDownRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                  <input
+                                    type="text"
+                                    value={sub.taskName}
+                                    onChange={(e) => handleUpdate(sub.id, 'taskName', e.target.value)}
+                                    className="w-full border-transparent border-b border-b-slate-200 focus:border-[#0061FF] focus:outline-none p-1 bg-transparent text-slate-800"
+                                  />
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-normal flex items-center gap-1 pl-5 mt-0.5">
+                                  <span>
+                                    {format(subDates.start, 'dd/MM/yyyy')} - {format(subDates.end, 'dd/MM/yyyy')}
+                                    <span className="text-[#0061FF] font-semibold ml-1">
+                                      ({lang === 'th' ? `วันที่ ${sStartDayNum} - ${sEndDayNum}` : `Day ${sStartDayNum} - ${sEndDayNum}`})
+                                    </span>
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Baseline Sub-task */}
+                              <td className="p-2 text-center bg-blue-50/10">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={sub.durationDays || 1}
+                                  onChange={(e) => handleDurationChange(sub, parseInt(e.target.value) || 1)}
+                                  className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs"
+                                  title={lang === 'th' ? 'กำหนดระยะเวลา (วัน)' : 'Set duration'}
+                                />
+                              </td>
+                              <td className="p-2 text-center bg-blue-50/10">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <input
+                                    type="date"
+                                    value={sub.baselineStartDate || ''}
+                                    onChange={(e) => handleBaselineStartChange(sub, e.target.value)}
+                                    className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                                  />
+                                  {!sub.baselineStartDate ? (
+                                    <span className="text-[10px] text-blue-700 bg-blue-50 px-1 py-0.5 rounded font-medium border border-blue-200" title={lang === 'th' ? 'คำนวณจากวันที่เริ่มโครงการ' : 'Calculated from project start date'}>
+                                      {lang === 'th' ? 'อ้างอิง:' : 'Ref:'} {format(subDates.start, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sStartDayNum}` : `Day ${sStartDayNum}`})
+                                    </span>
+                                  ) : (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px] text-blue-600 font-medium">
+                                        {format(parseISO(sub.baselineStartDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sStartDayNum}` : `Day ${sStartDayNum}`})
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          handleUpdate(sub.id, 'baselineStartDate', '');
+                                          handleUpdate(sub.id, 'baselineEndDate', '');
+                                        }}
+                                        className="text-[9px] text-red-500 hover:underline font-bold"
+                                        title={lang === 'th' ? 'ลบวันที่' : 'Clear date'}
+                                      >
+                                        {lang === 'th' ? 'ลบ' : 'Clear'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-2 text-center bg-blue-50/10 border-r border-slate-200">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <input
+                                    type="date"
+                                    value={sub.baselineEndDate || ''}
+                                    onChange={(e) => handleBaselineEndChange(sub, e.target.value)}
+                                    className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                                  />
+                                  {!sub.baselineEndDate ? (
+                                    <span className="text-[10px] text-blue-700 bg-blue-50 px-1 py-0.5 rounded font-medium border border-blue-200" title={lang === 'th' ? 'คำนวณจากวันที่เริ่มโครงการ' : 'Calculated from project start date'}>
+                                      {lang === 'th' ? 'อ้างอิง:' : 'Ref:'} {format(subDates.end, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sEndDayNum}` : `Day ${sEndDayNum}`})
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-blue-600 font-medium">
+                                      {format(parseISO(sub.baselineEndDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sEndDayNum}` : `Day ${sEndDayNum}`})
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Actual Sub-task */}
+                              <td className="p-2 text-center bg-orange-50/10">
                                 <input
                                   type="date"
-                                  value={sub.baselineStartDate || ''}
-                                  onChange={(e) => handleBaselineStartChange(sub, e.target.value)}
+                                  value={sub.actualStartDate || ''}
+                                  onChange={(e) => handleUpdate(sub.id, 'actualStartDate', e.target.value)}
                                   className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
                                 />
-                                {!sub.baselineStartDate ? (
-                                  <span className="text-[10px] text-blue-700 bg-blue-50 px-1 py-0.5 rounded font-medium border border-blue-200" title={lang === 'th' ? 'คำนวณจากวันที่เริ่มโครงการ' : 'Calculated from project start date'}>
-                                    {lang === 'th' ? 'อ้างอิง:' : 'Ref:'} {format(subDates.start, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sStartDayNum}` : `Day ${sStartDayNum}`})
-                                  </span>
-                                ) : (
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[10px] text-blue-600 font-medium">
-                                      {format(parseISO(sub.baselineStartDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sStartDayNum}` : `Day ${sStartDayNum}`})
-                                    </span>
+                              </td>
+                              <td className="p-2 text-center bg-orange-50/10">
+                                <input
+                                  type="date"
+                                  value={sub.actualEndDate || ''}
+                                  onChange={(e) => handleUpdate(sub.id, 'actualEndDate', e.target.value)}
+                                  className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
+                                />
+                              </td>
+                              <td className="p-2 text-center border-r border-slate-200 text-slate-600 bg-orange-50/10">
+                                {subActualDur > 0 ? `${subActualDur}` : '-'}
+                              </td>
+
+                              {/* Weight Sub-task */}
+                              <td className="p-2 text-center border-r border-slate-200 bg-slate-50/30">
+                                <span className="text-slate-600 text-xs">
+                                  {getTaskWeight(sub)}%
+                                </span>
+                              </td>
+
+                              {/* Progress Sub-task */}
+                              <td className="p-2 text-center border-r border-slate-200">
+                                <div className="flex flex-col items-center justify-center gap-1">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      value={sub.progress || 0}
+                                      onChange={(e) => handleUpdate(sub.id, 'progress', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                                      className="w-11 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs font-semibold text-[#FF5E00]"
+                                    />
+                                    <span className="text-slate-400 text-[10px]">%</span>
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        handleUpdate(sub.id, 'baselineStartDate', '');
-                                        handleUpdate(sub.id, 'baselineEndDate', '');
-                                      }}
-                                      className="text-[9px] text-red-500 hover:underline font-bold"
-                                      title={lang === 'th' ? 'ลบวันที่' : 'Clear date'}
+                                      onClick={() => handleAutoCalculateSingleProgress(sub)}
+                                      className="p-1 text-amber-600 hover:bg-amber-50 rounded border border-amber-200"
+                                      title={lang === 'th' ? 'คำนวณ % คืบหน้าอัตโนมัติตามวันที่' : 'Auto-calculate progress from dates'}
                                     >
-                                      {lang === 'th' ? 'ลบ' : 'Clear'}
+                                      <Zap className="w-3 h-3 text-amber-500" />
                                     </button>
                                   </div>
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-2 text-center bg-blue-50/10 border-r border-slate-200">
-                              <div className="flex flex-col items-center gap-0.5">
-                                <input
-                                  type="date"
-                                  value={sub.baselineEndDate || ''}
-                                  onChange={(e) => handleBaselineEndChange(sub, e.target.value)}
-                                  className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
-                                />
-                                {!sub.baselineEndDate ? (
-                                  <span className="text-[10px] text-blue-700 bg-blue-50 px-1 py-0.5 rounded font-medium border border-blue-200" title={lang === 'th' ? 'คำนวณจากวันที่เริ่มโครงการ' : 'Calculated from project start date'}>
-                                    {lang === 'th' ? 'อ้างอิง:' : 'Ref:'} {format(subDates.end, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sEndDayNum}` : `Day ${sEndDayNum}`})
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-blue-600 font-medium">
-                                    {format(parseISO(sub.baselineEndDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sEndDayNum}` : `Day ${sEndDayNum}`})
-                                  </span>
-                                )}
-                              </div>
-                            </td>
+                                  <div className="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full transition-all duration-300 ${(sub.progress || 0) === 100 ? 'bg-emerald-500' : 'bg-[#FF5E00]'}`}
+                                      style={{ width: `${sub.progress || 0}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
 
-                            {/* Actual Sub-task */}
-                            <td className="p-2 text-center bg-orange-50/10">
-                              <input
-                                type="date"
-                                value={sub.actualStartDate || ''}
-                                onChange={(e) => handleUpdate(sub.id, 'actualStartDate', e.target.value)}
-                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
-                              />
-                            </td>
-                            <td className="p-2 text-center bg-orange-50/10">
-                              <input
-                                type="date"
-                                value={sub.actualEndDate || ''}
-                                onChange={(e) => handleUpdate(sub.id, 'actualEndDate', e.target.value)}
-                                className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
-                              />
-                            </td>
-                            <td className="p-2 text-center border-r border-slate-200 text-slate-600 bg-orange-50/10">
-                              {subActualDur > 0 ? `${subActualDur}` : '-'}
-                            </td>
-
-                            {/* Weight Sub-task */}
-                            <td className="p-2 text-center border-r border-slate-200 bg-slate-50/30">
-                              <span className="text-slate-600 text-xs">
-                                {getTaskWeight(sub)}%
-                              </span>
-                            </td>
-
-                            {/* Progress Sub-task */}
-                            <td className="p-2 text-center border-r border-slate-200">
-                              <div className="flex flex-col items-center justify-center gap-1">
+                              {/* Actions */}
+                              <td className="p-2 text-center">
                                 <div className="flex items-center justify-center gap-1">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    value={sub.progress || 0}
-                                    onChange={(e) => handleUpdate(sub.id, 'progress', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                    className="w-11 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs font-semibold text-[#FF5E00]"
-                                  />
-                                  <span className="text-slate-400 text-[10px]">%</span>
+                                  {/* Reorder Up/Down for Subtasks */}
+                                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded p-0.5 shadow-2xs">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoveSubTask(sub.id, main.id, 'up')}
+                                      disabled={subIdx === 0}
+                                      className="p-0.5 hover:bg-slate-200 text-slate-600 disabled:opacity-20 disabled:hover:bg-transparent rounded transition-colors"
+                                      title={lang === 'th' ? 'เลื่อนขึ้น (สลับลำดับงานย่อย)' : 'Move Sub Task Up'}
+                                    >
+                                      <ChevronUp className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoveSubTask(sub.id, main.id, 'down')}
+                                      disabled={subIdx === subScopes.length - 1}
+                                      className="p-0.5 hover:bg-slate-200 text-slate-600 disabled:opacity-20 disabled:hover:bg-transparent rounded transition-colors"
+                                      title={lang === 'th' ? 'เลื่อนลง (สลับลำดับงานย่อย)' : 'Move Sub Task Down'}
+                                    >
+                                      <ChevronDown className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+
+                                  {/* Insert Sub Task Menu */}
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveInsertMenuId(activeInsertMenuId === sub.id ? null : sub.id)}
+                                      className="p-1 px-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-medium flex items-center gap-0.5 border border-slate-300"
+                                      title={lang === 'th' ? 'แทรกงานย่อยด้านบนหรือด้านล่าง' : 'Insert Sub Task Above or Below'}
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span className="text-[10px]">{lang === 'th' ? 'แทรก' : 'Insert'}</span>
+                                    </button>
+
+                                    {activeInsertMenuId === sub.id && (
+                                      <>
+                                        <div className="fixed inset-0 z-20" onClick={() => setActiveInsertMenuId(null)} />
+                                        <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-xl border border-slate-200 z-30 p-1 space-y-0.5 text-left text-xs font-semibold">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setInsertState({ targetId: sub.id, position: 'above', isSub: true, parentId: main.id });
+                                              setInsertTaskName('');
+                                              setActiveInsertMenuId(null);
+                                            }}
+                                            className="w-full text-left px-2.5 py-1.5 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded flex items-center gap-1.5"
+                                          >
+                                            <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
+                                            <span>{lang === 'th' ? 'แทรกงานย่อยด้านบน' : 'Insert Sub Task Above'}</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setInsertState({ targetId: sub.id, position: 'below', isSub: true, parentId: main.id });
+                                              setInsertTaskName('');
+                                              setActiveInsertMenuId(null);
+                                            }}
+                                            className="w-full text-left px-2.5 py-1.5 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded flex items-center gap-1.5"
+                                          >
+                                            <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                                            <span>{lang === 'th' ? 'แทรกงานย่อยด้านล่าง' : 'Insert Sub Task Below'}</span>
+                                          </button>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+
                                   <button
-                                    type="button"
-                                    onClick={() => handleAutoCalculateSingleProgress(sub)}
-                                    className="p-1 text-amber-600 hover:bg-amber-50 rounded border border-amber-200"
-                                    title={lang === 'th' ? 'คำนวณ % คืบหน้าอัตโนมัติตามวันที่' : 'Auto-calculate progress from dates'}
+                                    onClick={() => handleDelete(sub.id)}
+                                    className="p-1 text-red-400 hover:bg-red-50 rounded"
+                                    title={lang === 'th' ? 'ลบหัวข้อย่อย' : 'Delete Sub-topic'}
                                   >
-                                    <Zap className="w-3 h-3 text-amber-500" />
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
-                                <div className="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                                  <div 
-                                    className={`h-full transition-all duration-300 ${(sub.progress || 0) === 100 ? 'bg-emerald-500' : 'bg-[#FF5E00]'}`}
-                                    style={{ width: `${sub.progress || 0}%` }}
-                                  />
-                                </div>
-                              </div>
-                            </td>
+                              </td>
+                            </tr>
 
-                            {/* Delete */}
-                            <td className="p-2 text-center">
-                              <button
-                                onClick={() => handleDelete(sub.id)}
-                                className="p-1 text-red-400 hover:bg-red-50 rounded"
-                                title={lang === 'th' ? 'ลบหัวข้อย่อย' : 'Delete Sub-topic'}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
+                            {/* Inline Insertion Row BELOW Sub Task */}
+                            {renderInlineInsertRow(sub.id, 'below', true, main.id, sub.taskName)}
+                          </React.Fragment>
                         );
                       })}
 
@@ -1497,152 +1804,20 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
             </tbody>
           </table>
         ) : (
-          /* Gantt Chart View - Pre-Work Assessment & Timeline Estimation */
+          /* Gantt Chart View */
           <div className="p-4 min-w-[850px] space-y-5">
-            {/* Pre-Work Assessment Workspace Header Banner */}
-            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white p-4 sm:p-5 rounded-xl shadow-md border border-indigo-800/50">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-indigo-800/60">
-                <div>
-                  <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider mb-1">
-                    <Sparkles className="w-4 h-4" />
-                    <span>{lang === 'th' ? 'ระบบประเมินการเข้าทำงานก่อนจัดทำแผนงาน' : 'Pre-Work Assessment & Workday Estimator'}</span>
-                  </div>
-                  <h4 className="text-lg font-extrabold text-white">
-                    {lang === 'th' ? 'การประเมินกำลังคน กรอบเวลา และระดับความเสี่ยง' : 'Workforce, Duration & Risk Level Assessment'}
-                  </h4>
-                  <p className="text-xs text-indigo-200/90 mt-0.5">
-                    {lang === 'th' 
-                      ? 'จำลองและประเมินระยะเวลาการทำงาน (Workdays) ก่อนระบุวันที่เริ่มงานจริงในตาราง' 
-                      : 'Simulate workday sequence and team sizing before setting baseline calendar dates'}
-                  </p>
-                </div>
-
-                <button
-                  onClick={handleApplyAssessmentPreset}
-                  className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center gap-2 shrink-0 border border-blue-400/40 transition-all"
-                  title={lang === 'th' ? 'นำค่าประเมินตามโหมดจำลองไปตั้งเป็นระยะเวลาแผนงานจริง' : 'Sync estimation into baseline schedule'}
-                >
-                  <Zap className="w-4 h-4 text-amber-300 animate-pulse" />
-                  <span>{lang === 'th' ? 'นำผลประเมินบันทึกเข้าแผนงานจริง' : 'Sync Assessment to Baseline'}</span>
-                </button>
-              </div>
-
-              {/* Assessment Metrics Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-                {/* Metric 1: Total Estimated Days */}
-                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/10">
-                  <div className="flex items-center justify-between text-indigo-200 text-xs font-semibold mb-1">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-blue-400" />
-                      {lang === 'th' ? 'ระยะเวลาประเมินรวม' : 'Est. Total Days'}
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-200 font-bold">
-                      {estimationPreset === 'fast' ? '-20% Fast Track' : estimationPreset === 'buffer' ? '+15% Buffer' : '100% Standard'}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-black text-white">
-                      {Math.max(1, Math.round(totalProjectPlannedDuration * (estimationPreset === 'fast' ? 0.8 : estimationPreset === 'buffer' ? 1.15 : 1.0) * (preWorkRiskLevel === 'high' ? 1.1 : preWorkRiskLevel === 'low' ? 0.95 : 1.0)))}
-                    </span>
-                    <span className="text-xs text-indigo-200 font-bold">{lang === 'th' ? 'วันดำเนินงาน' : 'Workdays'}</span>
-                  </div>
-                  <div className="text-[10px] text-indigo-300 mt-1">
-                    {lang === 'th' ? `ระยะเวลาเดิมตามงาน: ${totalProjectPlannedDuration} วัน` : `Original scope: ${totalProjectPlannedDuration} days`}
-                  </div>
-                </div>
-
-                {/* Metric 2: Estimated Workforce / Man-Days */}
-                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/10">
-                  <div className="flex items-center justify-between text-indigo-200 text-xs font-semibold mb-1">
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-emerald-400" />
-                      {lang === 'th' ? 'ประเมินกำลังคนเข้าทำงาน' : 'Workforce Estimate'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={preWorkManpower}
-                      onChange={(e) => setPreWorkManpower(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-16 px-2 py-1 text-sm text-center font-bold bg-slate-900 border border-indigo-400/50 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-xs text-white font-bold">{lang === 'th' ? 'คน/วัน' : 'workers/day'}</span>
-                      <span className="text-[10px] text-emerald-300 font-semibold">
-                        = {Math.max(1, Math.round(totalProjectPlannedDuration * (estimationPreset === 'fast' ? 0.8 : estimationPreset === 'buffer' ? 1.15 : 1.0) * (preWorkRiskLevel === 'high' ? 1.1 : preWorkRiskLevel === 'low' ? 0.95 : 1.0))) * preWorkManpower} Man-Days
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Metric 3: Risk Level */}
-                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/10">
-                  <div className="flex items-center justify-between text-indigo-200 text-xs font-semibold mb-1">
-                    <span className="flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                      {lang === 'th' ? 'ระดับความซับซ้อน/ความเสี่ยง' : 'Risk & Complexity'}
-                    </span>
-                  </div>
-                  <select
-                    value={preWorkRiskLevel}
-                    onChange={(e) => setPreWorkRiskLevel(e.target.value as 'low' | 'medium' | 'high')}
-                    className="w-full px-2 py-1 text-xs font-bold bg-slate-900 border border-indigo-400/50 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-400 mt-1"
-                  >
-                    <option value="low">{lang === 'th' ? 'ต่ำ (Low - 0.95x)' : 'Low Risk (0.95x)'}</option>
-                    <option value="medium">{lang === 'th' ? 'ปานกลาง (Medium - 1.0x)' : 'Medium Risk (1.0x)'}</option>
-                    <option value="high">{lang === 'th' ? 'สูง (High - 1.1x เผื่อเสี่ยง)' : 'High Risk (1.1x)'}</option>
-                  </select>
-                </div>
-
-                {/* Metric 4: Simulation Preset */}
-                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/10">
-                  <div className="text-indigo-200 text-xs font-semibold mb-1.5">
-                    {lang === 'th' ? 'โหมดจำลองกรอบเวลาเข้าทำงาน' : 'Simulation Mode'}
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    <button
-                      onClick={() => setEstimationPreset('standard')}
-                      className={`px-1.5 py-1 text-[10px] font-bold rounded transition-all ${
-                        estimationPreset === 'standard' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-800/80 text-indigo-200 hover:bg-slate-700'
-                      }`}
-                    >
-                      {lang === 'th' ? 'ปกติ' : 'Standard'}
-                    </button>
-                    <button
-                      onClick={() => setEstimationPreset('fast')}
-                      className={`px-1.5 py-1 text-[10px] font-bold rounded transition-all ${
-                        estimationPreset === 'fast' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-800/80 text-indigo-200 hover:bg-slate-700'
-                      }`}
-                    >
-                      {lang === 'th' ? 'เร่งด่วน' : 'Fast'}
-                    </button>
-                    <button
-                      onClick={() => setEstimationPreset('buffer')}
-                      className={`px-1.5 py-1 text-[10px] font-bold rounded transition-all ${
-                        estimationPreset === 'buffer' ? 'bg-amber-600 text-white shadow-xs' : 'bg-slate-800/80 text-indigo-200 hover:bg-slate-700'
-                      }`}
-                    >
-                      {lang === 'th' ? 'สำรอง' : 'Buffer'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* Quick Add Main Task in Gantt View */}
             <div className="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 rounded-lg border border-blue-200/90 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
                 <Plus className="w-4 h-4 text-[#0061FF]" />
-                <span>{lang === 'th' ? 'เพิ่มขอบเขตงานประเมินเข้าทำงาน:' : 'Add Main Scope for Pre-Work Assessment:'}</span>
+                <span>{lang === 'th' ? 'เพิ่มขอบเขตงานหลัก:' : 'Add Main Scope:'}</span>
               </div>
               <div className="flex items-center gap-2 flex-1 max-w-xl">
                 <input
                   type="text"
                   value={ganttNewTaskName}
                   onChange={(e) => setGanttNewTaskName(e.target.value)}
-                  placeholder={lang === 'th' ? 'พิมพ์ชื่อขอบเขตงานประเมินที่ต้องการเพิ่ม...' : 'Enter scope name for assessment...'}
+                  placeholder={lang === 'th' ? 'พิมพ์ชื่อขอบเขตงานหลักที่ต้องการเพิ่ม...' : 'Enter main scope name...'}
                   className="flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
                   onKeyDown={(e) => e.key === 'Enter' && handleAddGanttMainTask()}
                 />
@@ -2013,7 +2188,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                 }`}
               >
                 <CheckSquare className="w-3.5 h-3.5" />
-                <span>{lang === 'th' ? `ขอบเขตงานในโครงการ (${projectScopes.length})` : `Project Scopes (${projectScopes.length})`}</span>
+                <span>{lang === 'th' ? `ขอบเขตงานในโครงการ (${masterProjectScopes.length})` : `Project Scopes (${masterProjectScopes.length})`}</span>
               </button>
 
               <button
@@ -2065,7 +2240,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
               {/* TAB 1: Defined Project Scopes */}
               {activeScopeTab === 'defined' && (
                 <div className="space-y-3">
-                  {projectScopes.length === 0 ? (
+                  {masterProjectScopes.length === 0 ? (
                     <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 rounded-lg space-y-2">
                       <p className="text-xs font-medium text-slate-500">
                         {lang === 'th' ? 'ยังไม่มีรายการขอบเขตงานที่บันทึกไว้ในเมนูกำหนดขอบเขตงาน' : 'No defined scope items found in this project yet.'}
@@ -2080,10 +2255,10 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                   ) : (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between bg-slate-100 p-2 rounded text-xs font-semibold text-slate-700">
-                        <span>{lang === 'th' ? 'รายการขอบเขตงานทั้งหมดในโครงการ:' : 'All Project Scope Items:'}</span>
+                        <span>{lang === 'th' ? 'รายการขอบเขตงานทั้งหมดในโครงการ (Scope of Work):' : 'All Project Scope Items:'}</span>
                         <button
                           onClick={() => {
-                            const allNames = projectScopes.map(s => s.taskName);
+                            const allNames = masterProjectScopes.map(s => s.taskName);
                             if (selectedScopeCheckboxes.length === allNames.length) {
                               setSelectedScopeCheckboxes([]);
                             } else {
@@ -2092,14 +2267,14 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                           }}
                           className="text-emerald-700 hover:underline font-bold text-[11px]"
                         >
-                          {selectedScopeCheckboxes.length === projectScopes.length
+                          {selectedScopeCheckboxes.length === masterProjectScopes.length
                             ? (lang === 'th' ? 'ยกเลิกการเลือกทั้งหมด' : 'Deselect All')
                             : (lang === 'th' ? 'เลือกทั้งหมด' : 'Select All')}
                         </button>
                       </div>
 
                       <div className="grid grid-cols-1 gap-1.5 max-h-[280px] overflow-y-auto border border-slate-200 p-2 rounded-lg bg-white">
-                        {projectScopes.map((scope) => {
+                        {masterProjectScopes.map((scope) => {
                           const isChecked = selectedScopeCheckboxes.includes(scope.taskName);
                           const isSub = !!scope.parentId;
                           return (

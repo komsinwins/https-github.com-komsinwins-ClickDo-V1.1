@@ -57,6 +57,20 @@ export interface ScopeOfWork {
   progress: number;
 }
 
+export interface ScheduleTask {
+  id: string;
+  projectId: string;
+  taskName: string;
+  parentId?: string;
+  order?: number;
+  durationDays?: number;
+  baselineStartDate?: string;
+  baselineEndDate?: string;
+  actualStartDate?: string;
+  actualEndDate?: string;
+  progress: number;
+}
+
 export interface ContractorMaster {
   id: string;
   company?: string;
@@ -104,6 +118,11 @@ export interface Vehicle {
   color: string;
 }
 
+export interface ContactRole {
+  id: string;
+  name: string;
+}
+
 export interface Contact {
   id: string;
   projectId: string;
@@ -147,8 +166,10 @@ export interface AppState {
   salespersons: Salesperson[];
   projectManagers: ProjectManager[];
   contractorMaster: ContractorMaster[];
+  contactRoles?: ContactRole[];
   projects: Project[];
   scopes: ScopeOfWork[];
+  scheduleTasks?: ScheduleTask[];
   contractors: Contractor[];
   workers: Worker[];
   vehicles: Vehicle[];

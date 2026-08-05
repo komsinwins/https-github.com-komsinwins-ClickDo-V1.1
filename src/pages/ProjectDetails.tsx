@@ -31,7 +31,7 @@ export function ProjectDetails({ projectId, tab, navigate }: Props) {
     { id: 'info', label: lang === 'th' ? 'ข้อมูลโครงการ' : 'Info' },
     { id: 'scope', label: lang === 'th' ? 'ขอบเขตงาน' : 'Scope of Work' },
     { id: 'timeline', label: lang === 'th' ? 'ตารางเวลา (Gantt)' : 'Timeline (Gantt)' },
-    { id: 'schedule', label: lang === 'th' ? 'แผนงาน' : 'Schedule Plan' },
+    { id: 'schedule', label: lang === 'th' ? 'แผนการดำเนินงาน' : 'Execution Plan' },
     { id: 'contractors', label: lang === 'th' ? 'ผู้รับเหมา' : 'Contractors' },
     { id: 'workers', label: lang === 'th' ? 'ผู้ปฎิบัติงาน & ยานพาหนะ' : 'Workers & Vehicles' },
     { id: 'contacts', label: lang === 'th' ? 'รายชื่อติดต่อ' : 'Contacts' },
