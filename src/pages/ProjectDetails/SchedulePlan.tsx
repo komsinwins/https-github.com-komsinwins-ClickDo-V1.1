@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
 import { differenceInDays, parseISO, isValid, addDays, format, min, max } from 'date-fns';
-import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer, Zap, Calculator, Sparkles } from 'lucide-react';
+import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer, Zap, Calculator, Sparkles, Users, AlertTriangle, CalendarX, CheckCircle2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ScopeOfWork as ScopeType } from '../../types';
 import { SaveButton } from '../../components/SaveButton';
@@ -14,6 +14,11 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   const [showSubInput, setShowSubInput] = useState<Record<string, boolean>>({});
   const [ganttNewTaskName, setGanttNewTaskName] = useState('');
   const [ganttNewTaskDuration, setGanttNewTaskDuration] = useState<number>(1);
+  
+  // Pre-Work Assessment States
+  const [preWorkManpower, setPreWorkManpower] = useState<number>(4);
+  const [preWorkRiskLevel, setPreWorkRiskLevel] = useState<'low' | 'medium' | 'high'>('medium');
+  const [estimationPreset, setEstimationPreset] = useState<'standard' | 'fast' | 'buffer'>('standard');
   
   const lang = data.language || 'th';
   const project = data.projects.find(p => p.id === projectId);
@@ -38,6 +43,10 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
   // Calculate dates sequentially for main tasks and sub-tasks
   const projectStartDate = isValid(parseISO(project.startDate)) ? parseISO(project.startDate) : new Date();
+  const projectEndDate = project.endDate && isValid(parseISO(project.endDate)) 
+    ? parseISO(project.endDate) 
+    : addDays(projectStartDate, 30);
+  const projectContractDuration = Math.max(1, differenceInDays(projectEndDate, projectStartDate) + 1);
 
   // We compute date windows for all items
   const itemCalculatedDates: Record<string, { start: Date; end: Date; duration: number }> = {};
@@ -384,6 +393,75 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     setGanttNewTaskDuration(1);
   };
 
+  const handleApplyAssessmentPreset = () => {
+    let multiplier = 1.0;
+    if (estimationPreset === 'fast') multiplier = 0.8;
+    if (estimationPreset === 'buffer') multiplier = 1.15;
+    if (preWorkRiskLevel === 'high') multiplier *= 1.1;
+    if (preWorkRiskLevel === 'low') multiplier *= 0.95;
+
+    const updatedScopes = data.scopes.map(s => {
+      if (s.projectId !== projectId) return s;
+      const baseDur = s.durationDays || 1;
+      const newDur = Math.max(1, Math.round(baseDur * multiplier));
+      return { ...s, durationDays: newDur };
+    });
+
+    updateData({ scopes: updatedScopes });
+  };
+
+  const handleAutoSyncProjectDates = () => {
+    let currentStart = projectStartDate;
+    const updatedScopesMap: Record<string, { baselineStartDate: string; baselineEndDate: string }> = {};
+
+    mainScopes.forEach(main => {
+      const subScopes = projectScopes.filter(s => s.parentId === main.id);
+      if (subScopes.length === 0) {
+        const dur = Math.max(1, main.durationDays || 1);
+        const start = currentStart;
+        const end = addDays(start, dur - 1);
+        updatedScopesMap[main.id] = {
+          baselineStartDate: format(start, 'yyyy-MM-dd'),
+          baselineEndDate: format(end, 'yyyy-MM-dd')
+        };
+        currentStart = addDays(end, 1);
+      } else {
+        let mainStart = currentStart;
+        let totalSubDur = 0;
+        subScopes.forEach(sub => {
+          const dur = Math.max(1, sub.durationDays || 1);
+          const start = currentStart;
+          const end = addDays(start, dur - 1);
+          updatedScopesMap[sub.id] = {
+            baselineStartDate: format(start, 'yyyy-MM-dd'),
+            baselineEndDate: format(end, 'yyyy-MM-dd')
+          };
+          totalSubDur += dur;
+          currentStart = addDays(end, 1);
+        });
+        const mainEnd = addDays(mainStart, totalSubDur > 0 ? totalSubDur - 1 : 0);
+        updatedScopesMap[main.id] = {
+          baselineStartDate: format(mainStart, 'yyyy-MM-dd'),
+          baselineEndDate: format(mainEnd, 'yyyy-MM-dd')
+        };
+      }
+    });
+
+    const updatedScopes = data.scopes.map(s => {
+      if (s.projectId !== projectId) return s;
+      if (updatedScopesMap[s.id]) {
+        return {
+          ...s,
+          baselineStartDate: updatedScopesMap[s.id].baselineStartDate,
+          baselineEndDate: updatedScopesMap[s.id].baselineEndDate
+        };
+      }
+      return s;
+    });
+
+    updateData({ scopes: updatedScopes });
+  };
+
   const handleAddSub = (parentId: string) => {
     const name = subTaskInputs[parentId];
     if (!name || !name.trim()) return;
@@ -438,25 +516,71 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
         }
       `}</style>
 
+      {/* Project Schedule Reference & Auto Sync Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white p-3.5 sm:p-4 rounded-xl shadow-md border border-blue-800/80 print:hidden mb-1">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-blue-600/30 rounded-lg border border-blue-400/30 shrink-0">
+              <Clock className="w-5 h-5 text-blue-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400">
+                  {lang === 'th' ? 'กรอบเวลาอ้างอิงจากข้อมูลโครงการ' : 'Project Contract Reference Timeline'}
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/30 text-blue-200 border border-blue-400/30">
+                  {project.name}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 flex-wrap mt-1 text-xs font-semibold text-slate-200">
+                <span>
+                  {lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start:'}{' '}
+                  <strong className="text-white font-mono bg-white/10 px-1.5 py-0.5 rounded">{format(projectStartDate, 'dd/MM/yyyy')}</strong>
+                </span>
+                <span>
+                  {lang === 'th' ? 'วันที่สิ้นสุดโครงการ:' : 'End:'}{' '}
+                  <strong className="text-white font-mono bg-white/10 px-1.5 py-0.5 rounded">{format(projectEndDate, 'dd/MM/yyyy')}</strong>
+                </span>
+                <span className="text-amber-300 font-bold bg-amber-500/20 px-2 py-0.5 rounded border border-amber-400/30">
+                  {lang === 'th' ? `ระยะเวลาตามสัญญา: ${projectContractDuration} วัน` : `Contract Duration: ${projectContractDuration} days`}
+                </span>
+                <span className="text-emerald-300 font-bold bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-400/30">
+                  {lang === 'th' ? `ขอบเขตงานรวม: ${totalProjectPlannedDuration} วัน` : `Total Tasks Sum: ${totalProjectPlannedDuration} days`}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleAutoSyncProjectDates}
+            className="px-4 py-2.5 bg-[#0061FF] hover:bg-blue-600 text-white text-xs font-bold rounded-lg shadow-sm border border-blue-400/40 flex items-center justify-center gap-2 transition-all shrink-0 active:scale-95"
+            title={lang === 'th' ? 'คำนวณและอ้างอิงแจกแจงวันที่แผนงานของทุกขอบเขตงานเรียงต่อกันตามวันที่เริ่มโครงการ' : 'Auto-calculate timeline start and end dates based on project start date'}
+          >
+            <Zap className="w-4 h-4 text-amber-300" />
+            <span>{lang === 'th' ? 'อ้างอิงและคำนวณวันที่จากโครงการ' : 'Auto-Sync Dates from Project'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* Controls Header */}
       <div className="flex flex-col space-y-3 bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm print:hidden">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           {/* Left: View Tabs and Add Task */}
           <div className="flex gap-3 w-full lg:w-auto flex-wrap items-center">
-            <div className="flex bg-slate-100 p-1 rounded-md w-full sm:w-auto">
+            <div className="flex bg-slate-100 p-1 rounded-md w-full sm:w-auto border border-slate-200">
               <button
                 onClick={() => setView('table')}
-                className={`flex-1 sm:flex-none flex justify-center items-center gap-2 px-3 py-1.5 text-xs font-medium rounded transition-colors ${view === 'table' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`flex-1 sm:flex-none flex justify-center items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded transition-colors ${view === 'table' ? 'bg-white shadow-xs text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
               >
-                <TableIcon className="w-3.5 h-3.5" />
-                {lang === 'th' ? 'ตารางข้อมูล' : 'Table View'}
+                <TableIcon className="w-4 h-4" />
+                {lang === 'th' ? '1. ตารางประเมินและแผนงาน' : '1. Schedule Plan Table'}
               </button>
               <button
                 onClick={() => setView('gantt')}
-                className={`flex-1 sm:flex-none flex justify-center items-center gap-2 px-3 py-1.5 text-xs font-medium rounded transition-colors ${view === 'gantt' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`flex-1 sm:flex-none flex justify-center items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded transition-colors ${view === 'gantt' ? 'bg-white shadow-xs text-[#0061FF]' : 'text-slate-600 hover:text-slate-900'}`}
               >
-                <BarChart className="w-3.5 h-3.5" />
-                {lang === 'th' ? 'แกนต์ชาร์ต' : 'Gantt Chart'}
+                <Calculator className="w-4 h-4 text-indigo-600" />
+                {lang === 'th' ? '2. ประเมินการเข้าทำงาน & Gantt' : '2. Pre-Work Assessment & Gantt'}
               </button>
             </div>
             
@@ -711,40 +835,69 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                         <td className="p-2 text-center bg-blue-50/30">
                           {hasSubs ? (
                             <div className="flex flex-col items-center">
-                              <span className="text-slate-800 font-medium">{format(mainDates.start, 'dd/MM/yyyy')}</span>
+                              <span className="text-slate-800 font-medium">
+                                {main.baselineStartDate && isValid(parseISO(main.baselineStartDate)) ? format(parseISO(main.baselineStartDate), 'dd/MM/yyyy') : format(mainDates.start, 'dd/MM/yyyy')}
+                              </span>
                               <span className="text-[10px] text-blue-600 font-semibold">{lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`}</span>
                             </div>
                           ) : (
                             <div className="flex flex-col items-center gap-0.5">
                               <input
                                 type="date"
-                                value={main.baselineStartDate || format(mainDates.start, 'yyyy-MM-dd')}
+                                value={main.baselineStartDate || ''}
                                 onChange={(e) => handleBaselineStartChange(main, e.target.value)}
                                 className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
                               />
-                              <span className="text-[10px] text-blue-600 font-semibold">
-                                {format(mainDates.start, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`})
-                              </span>
+                              {!main.baselineStartDate ? (
+                                <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded font-medium border border-amber-200">
+                                  {lang === 'th' ? 'ยังไม่ระบุวันที่' : 'Date Pending'} ({lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`})
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-blue-600 font-semibold">
+                                    {format(parseISO(main.baselineStartDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mStartDayNum}` : `Day ${mStartDayNum}`})
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleUpdate(main.id, 'baselineStartDate', '');
+                                      handleUpdate(main.id, 'baselineEndDate', '');
+                                    }}
+                                    className="text-[9px] text-red-500 hover:underline font-bold"
+                                    title={lang === 'th' ? 'ลบวันที่' : 'Clear date'}
+                                  >
+                                    {lang === 'th' ? 'ลบ' : 'Clear'}
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           )}
                         </td>
                         <td className="p-2 text-center bg-blue-50/30 border-r border-slate-200">
                           {hasSubs ? (
                             <div className="flex flex-col items-center">
-                              <span className="text-slate-800 font-medium">{format(mainDates.end, 'dd/MM/yyyy')}</span>
+                              <span className="text-slate-800 font-medium">
+                                {main.baselineEndDate && isValid(parseISO(main.baselineEndDate)) ? format(parseISO(main.baselineEndDate), 'dd/MM/yyyy') : format(mainDates.end, 'dd/MM/yyyy')}
+                              </span>
                               <span className="text-[10px] text-blue-600 font-semibold">{lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`}</span>
                             </div>
                           ) : (
                             <div className="flex flex-col items-center gap-0.5">
                               <input
                                 type="date"
-                                value={main.baselineEndDate || format(mainDates.end, 'yyyy-MM-dd')}
+                                value={main.baselineEndDate || ''}
                                 onChange={(e) => handleBaselineEndChange(main, e.target.value)}
                                 className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white text-slate-800 font-medium"
                               />
-                              <span className="text-[10px] text-blue-600 font-semibold">
-                                {format(mainDates.end, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`})
-                              </span>
+                              {!main.baselineEndDate ? (
+                                <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded font-medium border border-amber-200">
+                                  {lang === 'th' ? 'ยังไม่ระบุวันที่' : 'Date Pending'} ({lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`})
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-blue-600 font-semibold">
+                                  {format(parseISO(main.baselineEndDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${mEndDayNum}` : `Day ${mEndDayNum}`})
+                                </span>
+                              )}
                             </div>
                           )}
                         </td>
@@ -893,26 +1046,51 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                               <div className="flex flex-col items-center gap-0.5">
                                 <input
                                   type="date"
-                                  value={sub.baselineStartDate || format(subDates.start, 'yyyy-MM-dd')}
+                                  value={sub.baselineStartDate || ''}
                                   onChange={(e) => handleBaselineStartChange(sub, e.target.value)}
                                   className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
                                 />
-                                <span className="text-[10px] text-blue-600 font-medium">
-                                  {format(subDates.start, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sStartDayNum}` : `Day ${sStartDayNum}`})
-                                </span>
+                                {!sub.baselineStartDate ? (
+                                  <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded font-medium border border-amber-200">
+                                    {lang === 'th' ? 'ยังไม่ระบุวันที่' : 'Date Pending'} ({lang === 'th' ? `วันที่ ${sStartDayNum}` : `Day ${sStartDayNum}`})
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-blue-600 font-medium">
+                                      {format(parseISO(sub.baselineStartDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sStartDayNum}` : `Day ${sStartDayNum}`})
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleUpdate(sub.id, 'baselineStartDate', '');
+                                        handleUpdate(sub.id, 'baselineEndDate', '');
+                                      }}
+                                      className="text-[9px] text-red-500 hover:underline font-bold"
+                                      title={lang === 'th' ? 'ลบวันที่' : 'Clear date'}
+                                    >
+                                      {lang === 'th' ? 'ลบ' : 'Clear'}
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </td>
                             <td className="p-2 text-center bg-blue-50/10 border-r border-slate-200">
                               <div className="flex flex-col items-center gap-0.5">
                                 <input
                                   type="date"
-                                  value={sub.baselineEndDate || format(subDates.end, 'yyyy-MM-dd')}
+                                  value={sub.baselineEndDate || ''}
                                   onChange={(e) => handleBaselineEndChange(sub, e.target.value)}
                                   className="w-full border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-[11px] bg-white"
                                 />
-                                <span className="text-[10px] text-blue-600 font-medium">
-                                  {format(subDates.end, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sEndDayNum}` : `Day ${sEndDayNum}`})
-                                </span>
+                                {!sub.baselineEndDate ? (
+                                  <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded font-medium border border-amber-200">
+                                    {lang === 'th' ? 'ยังไม่ระบุวันที่' : 'Date Pending'} ({lang === 'th' ? `วันที่ ${sEndDayNum}` : `Day ${sEndDayNum}`})
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-blue-600 font-medium">
+                                    {format(parseISO(sub.baselineEndDate), 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${sEndDayNum}` : `Day ${sEndDayNum}`})
+                                  </span>
+                                )}
                               </div>
                             </td>
 
@@ -1042,20 +1220,152 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
             </tbody>
           </table>
         ) : (
-          /* Gantt Chart View */
-          <div className="p-4 min-w-[850px]">
+          /* Gantt Chart View - Pre-Work Assessment & Timeline Estimation */
+          <div className="p-4 min-w-[850px] space-y-5">
+            {/* Pre-Work Assessment Workspace Header Banner */}
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white p-4 sm:p-5 rounded-xl shadow-md border border-indigo-800/50">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-indigo-800/60">
+                <div>
+                  <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider mb-1">
+                    <Sparkles className="w-4 h-4" />
+                    <span>{lang === 'th' ? 'ระบบประเมินการเข้าทำงานก่อนจัดทำแผนงาน' : 'Pre-Work Assessment & Workday Estimator'}</span>
+                  </div>
+                  <h4 className="text-lg font-extrabold text-white">
+                    {lang === 'th' ? 'การประเมินกำลังคน กรอบเวลา และระดับความเสี่ยง' : 'Workforce, Duration & Risk Level Assessment'}
+                  </h4>
+                  <p className="text-xs text-indigo-200/90 mt-0.5">
+                    {lang === 'th' 
+                      ? 'จำลองและประเมินระยะเวลาการทำงาน (Workdays) ก่อนระบุวันที่เริ่มงานจริงในตาราง' 
+                      : 'Simulate workday sequence and team sizing before setting baseline calendar dates'}
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleApplyAssessmentPreset}
+                  className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center gap-2 shrink-0 border border-blue-400/40 transition-all"
+                  title={lang === 'th' ? 'นำค่าประเมินตามโหมดจำลองไปตั้งเป็นระยะเวลาแผนงานจริง' : 'Sync estimation into baseline schedule'}
+                >
+                  <Zap className="w-4 h-4 text-amber-300 animate-pulse" />
+                  <span>{lang === 'th' ? 'นำผลประเมินบันทึกเข้าแผนงานจริง' : 'Sync Assessment to Baseline'}</span>
+                </button>
+              </div>
+
+              {/* Assessment Metrics Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+                {/* Metric 1: Total Estimated Days */}
+                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/10">
+                  <div className="flex items-center justify-between text-indigo-200 text-xs font-semibold mb-1">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-blue-400" />
+                      {lang === 'th' ? 'ระยะเวลาประเมินรวม' : 'Est. Total Days'}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-200 font-bold">
+                      {estimationPreset === 'fast' ? '-20% Fast Track' : estimationPreset === 'buffer' ? '+15% Buffer' : '100% Standard'}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-black text-white">
+                      {Math.max(1, Math.round(totalProjectPlannedDuration * (estimationPreset === 'fast' ? 0.8 : estimationPreset === 'buffer' ? 1.15 : 1.0) * (preWorkRiskLevel === 'high' ? 1.1 : preWorkRiskLevel === 'low' ? 0.95 : 1.0)))}
+                    </span>
+                    <span className="text-xs text-indigo-200 font-bold">{lang === 'th' ? 'วันดำเนินงาน' : 'Workdays'}</span>
+                  </div>
+                  <div className="text-[10px] text-indigo-300 mt-1">
+                    {lang === 'th' ? `ระยะเวลาเดิมตามงาน: ${totalProjectPlannedDuration} วัน` : `Original scope: ${totalProjectPlannedDuration} days`}
+                  </div>
+                </div>
+
+                {/* Metric 2: Estimated Workforce / Man-Days */}
+                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/10">
+                  <div className="flex items-center justify-between text-indigo-200 text-xs font-semibold mb-1">
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5 text-emerald-400" />
+                      {lang === 'th' ? 'ประเมินกำลังคนเข้าทำงาน' : 'Workforce Estimate'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={preWorkManpower}
+                      onChange={(e) => setPreWorkManpower(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 px-2 py-1 text-sm text-center font-bold bg-slate-900 border border-indigo-400/50 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs text-white font-bold">{lang === 'th' ? 'คน/วัน' : 'workers/day'}</span>
+                      <span className="text-[10px] text-emerald-300 font-semibold">
+                        = {Math.max(1, Math.round(totalProjectPlannedDuration * (estimationPreset === 'fast' ? 0.8 : estimationPreset === 'buffer' ? 1.15 : 1.0) * (preWorkRiskLevel === 'high' ? 1.1 : preWorkRiskLevel === 'low' ? 0.95 : 1.0))) * preWorkManpower} Man-Days
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metric 3: Risk Level */}
+                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/10">
+                  <div className="flex items-center justify-between text-indigo-200 text-xs font-semibold mb-1">
+                    <span className="flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                      {lang === 'th' ? 'ระดับความซับซ้อน/ความเสี่ยง' : 'Risk & Complexity'}
+                    </span>
+                  </div>
+                  <select
+                    value={preWorkRiskLevel}
+                    onChange={(e) => setPreWorkRiskLevel(e.target.value as 'low' | 'medium' | 'high')}
+                    className="w-full px-2 py-1 text-xs font-bold bg-slate-900 border border-indigo-400/50 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-400 mt-1"
+                  >
+                    <option value="low">{lang === 'th' ? 'ต่ำ (Low - 0.95x)' : 'Low Risk (0.95x)'}</option>
+                    <option value="medium">{lang === 'th' ? 'ปานกลาง (Medium - 1.0x)' : 'Medium Risk (1.0x)'}</option>
+                    <option value="high">{lang === 'th' ? 'สูง (High - 1.1x เผื่อเสี่ยง)' : 'High Risk (1.1x)'}</option>
+                  </select>
+                </div>
+
+                {/* Metric 4: Simulation Preset */}
+                <div className="bg-white/10 backdrop-blur-md p-3 rounded-lg border border-white/10">
+                  <div className="text-indigo-200 text-xs font-semibold mb-1.5">
+                    {lang === 'th' ? 'โหมดจำลองกรอบเวลาเข้าทำงาน' : 'Simulation Mode'}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      onClick={() => setEstimationPreset('standard')}
+                      className={`px-1.5 py-1 text-[10px] font-bold rounded transition-all ${
+                        estimationPreset === 'standard' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-800/80 text-indigo-200 hover:bg-slate-700'
+                      }`}
+                    >
+                      {lang === 'th' ? 'ปกติ' : 'Standard'}
+                    </button>
+                    <button
+                      onClick={() => setEstimationPreset('fast')}
+                      className={`px-1.5 py-1 text-[10px] font-bold rounded transition-all ${
+                        estimationPreset === 'fast' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-800/80 text-indigo-200 hover:bg-slate-700'
+                      }`}
+                    >
+                      {lang === 'th' ? 'เร่งด่วน' : 'Fast'}
+                    </button>
+                    <button
+                      onClick={() => setEstimationPreset('buffer')}
+                      className={`px-1.5 py-1 text-[10px] font-bold rounded transition-all ${
+                        estimationPreset === 'buffer' ? 'bg-amber-600 text-white shadow-xs' : 'bg-slate-800/80 text-indigo-200 hover:bg-slate-700'
+                      }`}
+                    >
+                      {lang === 'th' ? 'สำรอง' : 'Buffer'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Quick Add Main Task in Gantt View */}
-            <div className="mb-5 p-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-lg border border-blue-200/80 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+            <div className="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 rounded-lg border border-blue-200/90 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
                 <Plus className="w-4 h-4 text-[#0061FF]" />
-                <span>{lang === 'th' ? 'เพิ่มขอบเขตงานหลักใหม่ ใน Gantt:' : 'Add Main Task Scope:'}</span>
+                <span>{lang === 'th' ? 'เพิ่มขอบเขตงานประเมินเข้าทำงาน:' : 'Add Main Scope for Pre-Work Assessment:'}</span>
               </div>
               <div className="flex items-center gap-2 flex-1 max-w-xl">
                 <input
                   type="text"
                   value={ganttNewTaskName}
                   onChange={(e) => setGanttNewTaskName(e.target.value)}
-                  placeholder={lang === 'th' ? 'พิมพ์ชื่อขอบเขตงานหลักที่ต้องการเพิ่ม...' : 'Enter new main task scope name...'}
+                  placeholder={lang === 'th' ? 'พิมพ์ชื่อขอบเขตงานประเมินที่ต้องการเพิ่ม...' : 'Enter scope name for assessment...'}
                   className="flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
                   onKeyDown={(e) => e.key === 'Enter' && handleAddGanttMainTask()}
                 />
