@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
 import { differenceInDays, parseISO, isValid, addDays, format, min, max } from 'date-fns';
-import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer } from 'lucide-react';
+import { Download, Plus, Trash2, BarChart, Table as TableIcon, CornerDownRight, Clock, Eye, FileText, CheckSquare, Sliders, Printer, Zap, Calculator, Sparkles } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ScopeOfWork as ScopeType } from '../../types';
 import { SaveButton } from '../../components/SaveButton';
@@ -12,6 +12,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   const [view, setView] = useState<'table' | 'gantt'>('table');
   const [subTaskInputs, setSubTaskInputs] = useState<Record<string, string>>({});
   const [showSubInput, setShowSubInput] = useState<Record<string, boolean>>({});
+  const [ganttNewTaskName, setGanttNewTaskName] = useState('');
+  const [ganttNewTaskDuration, setGanttNewTaskDuration] = useState<number>(1);
   
   const lang = data.language || 'th';
   const project = data.projects.find(p => p.id === projectId);
@@ -89,12 +91,114 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   maxDate = addDays(maxDate, 2);
   const totalDays = Math.max(1, differenceInDays(maxDate, minDate));
 
+  // Helper to calculate task progress % based on dates vs current date
+  const calculateProgressFromDates = (scope: ScopeType): number => {
+    const today = new Date();
+
+    // 1. If actual end date is set and valid
+    if (scope.actualEndDate && isValid(parseISO(scope.actualEndDate))) {
+      const actEnd = parseISO(scope.actualEndDate);
+      if (today >= actEnd) return 100;
+    }
+
+    // 2. If actual start date is set
+    if (scope.actualStartDate && isValid(parseISO(scope.actualStartDate))) {
+      const actStart = parseISO(scope.actualStartDate);
+      if (today < actStart) return 0; // Not started yet
+
+      if (scope.actualEndDate && isValid(parseISO(scope.actualEndDate))) {
+        const actEnd = parseISO(scope.actualEndDate);
+        const totalActDur = Math.max(1, differenceInDays(actEnd, actStart) + 1);
+        const elapsed = Math.max(1, differenceInDays(today, actStart) + 1);
+        return Math.min(100, Math.max(0, Math.round((elapsed / totalActDur) * 100)));
+      } else {
+        const plannedDur = scope.durationDays || 1;
+        const elapsed = Math.max(1, differenceInDays(today, actStart) + 1);
+        return Math.min(99, Math.max(0, Math.round((elapsed / plannedDur) * 100)));
+      }
+    }
+
+    // 3. Fallback: Baseline dates vs current date
+    const calcDates = itemCalculatedDates[scope.id];
+    if (calcDates && calcDates.start && calcDates.end) {
+      if (today < calcDates.start) return 0;
+      if (today >= calcDates.end) return 100;
+      const totalDur = Math.max(1, calcDates.duration);
+      const elapsed = Math.max(1, differenceInDays(today, calcDates.start) + 1);
+      return Math.min(99, Math.max(0, Math.round((elapsed / totalDur) * 100)));
+    }
+
+    return scope.progress || 0;
+  };
+
   const handleUpdate = (id: string, field: string, value: any) => {
     updateData({
-      scopes: data.scopes.map(s => 
-        s.id === id ? { ...s, [field]: value } : s
-      )
+      scopes: data.scopes.map(s => {
+        if (s.id !== id) return s;
+        const updated = { ...s, [field]: value };
+        // Auto-calculate progress when actual dates are updated
+        if (field === 'actualEndDate' && value) {
+          const actEnd = parseISO(value);
+          if (isValid(actEnd) && new Date() >= actEnd) {
+            updated.progress = 100;
+          }
+        } else if (field === 'actualStartDate' && value && (!s.progress || s.progress === 0)) {
+          const actStart = parseISO(value);
+          if (isValid(actStart)) {
+            updated.progress = calculateProgressFromDates(updated);
+          }
+        }
+        return updated;
+      })
     });
+  };
+
+  // Helper to auto-calculate progress for all leaf scopes in this project
+  const handleAutoCalculateAllProgress = () => {
+    const updatedScopes = data.scopes.map(scope => {
+      if (scope.projectId !== projectId) return scope;
+      const subScopes = data.scopes.filter(s => s.parentId === scope.id && s.projectId === projectId);
+      if (subScopes.length > 0) return scope; // parent scope calculated automatically
+      const computedProg = calculateProgressFromDates(scope);
+      return { ...scope, progress: computedProg };
+    });
+
+    updateData({ scopes: updatedScopes });
+  };
+
+  // Helper to auto-calculate progress for a single leaf scope
+  const handleAutoCalculateSingleProgress = (scope: ScopeType) => {
+    const computedProg = calculateProgressFromDates(scope);
+    handleUpdate(scope.id, 'progress', computedProg);
+  };
+
+  // Total project planned duration across main tasks
+  const totalProjectPlannedDuration = mainScopes.reduce((sum, main) => {
+    const subScopes = projectScopes.filter(s => s.parentId === main.id);
+    const dur = subScopes.length > 0
+      ? subScopes.reduce((subSum, s) => subSum + (s.durationDays || 1), 0)
+      : (main.durationDays || 1);
+    return sum + dur;
+  }, 0);
+
+  // Helper to calculate task weight percentage relative to total project duration
+  const getTaskWeight = (scope: ScopeType): number => {
+    if (totalProjectPlannedDuration === 0) return 0;
+    if (!scope.parentId) {
+      const subScopes = projectScopes.filter(s => s.parentId === scope.id);
+      const dur = subScopes.length > 0
+        ? subScopes.reduce((sum, s) => sum + (s.durationDays || 1), 0)
+        : (scope.durationDays || 1);
+      return Math.round((dur / totalProjectPlannedDuration) * 100);
+    } else {
+      const parent = projectScopes.find(s => s.id === scope.parentId);
+      if (!parent) return 0;
+      const parentSubScopes = projectScopes.filter(s => s.parentId === parent.id);
+      const parentTotalDur = parentSubScopes.reduce((sum, s) => sum + (s.durationDays || 1), 0);
+      const parentWeight = getTaskWeight(parent);
+      if (parentTotalDur === 0) return 0;
+      return Math.round(((scope.durationDays || 1) / parentTotalDur) * parentWeight);
+    }
   };
 
   // Helper to update baseline start date and auto-calculate duration / end date
@@ -263,6 +367,21 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     };
     updateData({ scopes: [...data.scopes, newScope] });
     setNewTask('');
+  };
+
+  const handleAddGanttMainTask = () => {
+    if (!ganttNewTaskName.trim()) return;
+    const newScope: ScopeType = {
+      id: uuidv4(),
+      projectId,
+      taskName: ganttNewTaskName.trim(),
+      order: projectScopes.length,
+      durationDays: Math.max(1, ganttNewTaskDuration || 1),
+      progress: 0,
+    };
+    updateData({ scopes: [...data.scopes, newScope] });
+    setGanttNewTaskName('');
+    setGanttNewTaskDuration(1);
   };
 
   const handleAddSub = (parentId: string) => {
@@ -476,30 +595,42 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
             <p className="text-xs text-slate-500 mt-1">{project.name} | {lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start Date:'} {format(projectStartDate, 'dd/MM/yyyy')}</p>
           </div>
 
-          {/* Overall Project Progress Banner */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-lg p-3 min-w-[240px]">
-            <div className="flex justify-between items-center text-xs font-semibold text-slate-700 mb-1.5">
-              <span>{lang === 'th' ? 'ความคืบหน้ารวมของโครงการ:' : 'Overall Project Progress:'}</span>
-              <span className="text-[#0061FF] font-bold text-sm">{overallProgress}%</span>
+          {/* Overall Project Progress Banner & Auto Calculate */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-lg p-2.5 px-3 min-w-[220px]">
+              <div className="flex justify-between items-center text-xs font-semibold text-slate-700 mb-1">
+                <span>{lang === 'th' ? 'ความคืบหน้ารวมของโครงการ:' : 'Overall Progress:'}</span>
+                <span className="text-[#0061FF] font-bold text-sm">{overallProgress}%</span>
+              </div>
+              <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-300 ${overallProgress === 100 ? 'bg-emerald-500' : 'bg-[#0061FF]'}`}
+                  style={{ width: `${overallProgress}%` }}
+                />
+              </div>
             </div>
-            <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-300 ${overallProgress === 100 ? 'bg-emerald-500' : 'bg-[#0061FF]'}`}
-                style={{ width: `${overallProgress}%` }}
-              />
-            </div>
+
+            <button
+              onClick={handleAutoCalculateAllProgress}
+              className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-xs font-semibold hover:opacity-90 flex items-center justify-center gap-1.5 shadow-xs transition-all border border-blue-700"
+              title={lang === 'th' ? 'คำนวณ % คืบหน้าอัตโนมัติตามวันที่จริงและวันที่ตามแผน' : 'Auto-calculate task progress percentage from actual dates'}
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+              <span>{lang === 'th' ? 'คำนวณ % คืบหน้าอัตโนมัติ' : 'Auto-Calculate Progress'}</span>
+            </button>
           </div>
         </div>
         
         {view === 'table' ? (
-          <table className="w-full text-left text-[11px] sm:text-xs border-collapse min-w-[950px]">
+          <table className="w-full text-left text-[11px] sm:text-xs border-collapse min-w-[1000px]">
             <thead className="bg-[#F8FAFC] text-slate-700 border-b-2 border-slate-300">
               <tr>
                 <th className="p-2 font-semibold w-12 text-center">{lang === 'th' ? 'ลำดับ' : 'No.'}</th>
                 <th className="p-2 font-semibold border-r border-slate-200 w-1/3">{lang === 'th' ? 'ขอบเขตงาน / หัวข้อย่อย' : 'Scope / Sub-topic'}</th>
                 <th className="p-2 font-semibold text-center border-r border-slate-200" colSpan={3}>{lang === 'th' ? 'แผนงาน (Baseline)' : 'Baseline'}</th>
                 <th className="p-2 font-semibold text-center border-r border-slate-200" colSpan={3}>{lang === 'th' ? 'ผลจริง (Actual)' : 'Actual'}</th>
-                <th className="p-2 font-semibold text-center border-r border-slate-200">{lang === 'th' ? '% คืบหน้า' : '% Progress'}</th>
+                <th className="p-2 font-semibold text-center border-r border-slate-200 w-20">{lang === 'th' ? 'น้ำหนัก (%)' : 'Weight (%)'}</th>
+                <th className="p-2 font-semibold text-center border-r border-slate-200 w-28">{lang === 'th' ? '% คืบหน้า' : '% Progress'}</th>
                 <th className="p-2 font-semibold text-center w-20">{lang === 'th' ? 'จัดการ' : 'Action'}</th>
               </tr>
               <tr className="bg-slate-100 border-b border-slate-200 text-[10px] text-slate-600">
@@ -510,6 +641,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                 <th className="p-1.5 text-center bg-orange-50/50">{lang === 'th' ? 'เริ่ม' : 'Start'}</th>
                 <th className="p-1.5 text-center bg-orange-50/50">{lang === 'th' ? 'สิ้นสุด' : 'End'}</th>
                 <th className="p-1.5 text-center bg-orange-50/50 border-r border-slate-200">{lang === 'th' ? 'จำนวนวัน' : 'Days'}</th>
+                <th className="p-1.5 border-r border-slate-200"></th>
                 <th className="p-1.5 border-r border-slate-200"></th>
                 <th className="p-1.5"></th>
               </tr>
@@ -638,25 +770,54 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                           {mainActualDur > 0 ? `${mainActualDur}` : '-'}
                         </td>
 
+                        {/* Weight % */}
+                        <td className="p-2 text-center border-r border-slate-200 bg-slate-50/50">
+                          <span className="font-bold text-slate-700 text-xs">
+                            {getTaskWeight(main)}%
+                          </span>
+                        </td>
+
                         {/* Progress */}
                         <td className="p-2 text-center border-r border-slate-200">
                           {hasSubs ? (
-                            <div className="flex items-center justify-center gap-1" title={lang === 'th' ? 'คำนวณอัตโนมัติจากงานย่อย' : 'Calculated automatically from sub-tasks'}>
-                              <span className="px-2 py-1 bg-blue-50 text-[#0061FF] rounded font-bold text-xs border border-blue-200">
+                            <div className="flex flex-col items-center justify-center gap-1" title={lang === 'th' ? 'คำนวณอัตโนมัติถ่วงน้ำหนักจากงานย่อย' : 'Calculated automatically weighted from sub-tasks'}>
+                              <span className="px-2 py-0.5 bg-blue-50 text-[#0061FF] rounded font-bold text-xs border border-blue-200">
                                 {computedProgress}%
                               </span>
+                              <div className="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-300 ${computedProgress === 100 ? 'bg-emerald-500' : 'bg-[#0061FF]'}`}
+                                  style={{ width: `${computedProgress}%` }}
+                                />
+                              </div>
                             </div>
                           ) : (
-                            <div className="flex items-center justify-center gap-1">
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={main.progress || 0}
-                                onChange={(e) => handleUpdate(main.id, 'progress', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white font-bold text-[#FF5E00]"
-                              />
-                              <span className="text-slate-500">%</span>
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              <div className="flex items-center justify-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={main.progress || 0}
+                                  onChange={(e) => handleUpdate(main.id, 'progress', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                                  className="w-11 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white font-bold text-[#FF5E00]"
+                                />
+                                <span className="text-slate-500 text-[10px]">%</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAutoCalculateSingleProgress(main)}
+                                  className="p-1 text-amber-600 hover:bg-amber-50 rounded border border-amber-200"
+                                  title={lang === 'th' ? 'คำนวณ % คืบหน้าอัตโนมัติตามวันที่' : 'Auto-calculate progress from dates'}
+                                >
+                                  <Zap className="w-3 h-3 text-amber-500" />
+                                </button>
+                              </div>
+                              <div className="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-300 ${(main.progress || 0) === 100 ? 'bg-emerald-500' : 'bg-[#FF5E00]'}`}
+                                  style={{ width: `${main.progress || 0}%` }}
+                                />
+                              </div>
                             </div>
                           )}
                         </td>
@@ -776,18 +937,41 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                               {subActualDur > 0 ? `${subActualDur}` : '-'}
                             </td>
 
+                            {/* Weight Sub-task */}
+                            <td className="p-2 text-center border-r border-slate-200 bg-slate-50/30">
+                              <span className="text-slate-600 text-xs">
+                                {getTaskWeight(sub)}%
+                              </span>
+                            </td>
+
                             {/* Progress Sub-task */}
                             <td className="p-2 text-center border-r border-slate-200">
-                              <div className="flex items-center justify-center gap-1">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  value={sub.progress || 0}
-                                  onChange={(e) => handleUpdate(sub.id, 'progress', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                  className="w-12 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs font-semibold text-[#FF5E00]"
-                                />
-                                <span className="text-slate-400 text-[10px]">%</span>
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <div className="flex items-center justify-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={sub.progress || 0}
+                                    onChange={(e) => handleUpdate(sub.id, 'progress', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                                    className="w-11 border border-slate-300 rounded focus:border-[#0061FF] focus:outline-none p-1 text-center bg-white text-xs font-semibold text-[#FF5E00]"
+                                  />
+                                  <span className="text-slate-400 text-[10px]">%</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAutoCalculateSingleProgress(sub)}
+                                    className="p-1 text-amber-600 hover:bg-amber-50 rounded border border-amber-200"
+                                    title={lang === 'th' ? 'คำนวณ % คืบหน้าอัตโนมัติตามวันที่' : 'Auto-calculate progress from dates'}
+                                  >
+                                    <Zap className="w-3 h-3 text-amber-500" />
+                                  </button>
+                                </div>
+                                <div className="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all duration-300 ${(sub.progress || 0) === 100 ? 'bg-emerald-500' : 'bg-[#FF5E00]'}`}
+                                    style={{ width: `${sub.progress || 0}%` }}
+                                  />
+                                </div>
                               </div>
                             </td>
 
@@ -859,17 +1043,78 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
           </table>
         ) : (
           /* Gantt Chart View */
-          <div className="p-4 min-w-[800px]">
+          <div className="p-4 min-w-[850px]">
+            {/* Quick Add Main Task in Gantt View */}
+            <div className="mb-5 p-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-lg border border-blue-200/80 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                <Plus className="w-4 h-4 text-[#0061FF]" />
+                <span>{lang === 'th' ? 'เพิ่มขอบเขตงานหลักใหม่ ใน Gantt:' : 'Add Main Task Scope:'}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-1 max-w-xl">
+                <input
+                  type="text"
+                  value={ganttNewTaskName}
+                  onChange={(e) => setGanttNewTaskName(e.target.value)}
+                  placeholder={lang === 'th' ? 'พิมพ์ชื่อขอบเขตงานหลักที่ต้องการเพิ่ม...' : 'Enter new main task scope name...'}
+                  className="flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddGanttMainTask()}
+                />
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="1"
+                    value={ganttNewTaskDuration}
+                    onChange={(e) => setGanttNewTaskDuration(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-16 px-2 py-1.5 text-xs text-center border border-slate-300 rounded bg-white font-bold text-slate-800"
+                    title={lang === 'th' ? 'จำนวนวันทำงาน' : 'Duration (days)'}
+                  />
+                  <span className="text-xs text-slate-600 font-medium">{lang === 'th' ? 'วัน' : 'days'}</span>
+                </div>
+                <button
+                  onClick={handleAddGanttMainTask}
+                  className="px-3.5 py-1.5 bg-[#0061FF] text-white rounded text-xs font-bold hover:bg-blue-700 flex items-center gap-1 shadow-xs shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{lang === 'th' ? 'เพิ่มงานหลัก' : 'Add Main Task'}</span>
+                </button>
+              </div>
+            </div>
+
             {mainScopes.length === 0 ? (
-              <p className="text-center text-slate-500">{lang === 'th' ? 'ไม่มีข้อมูลงาน' : 'No tasks available.'}</p>
+              <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 rounded-lg">
+                <p className="text-slate-500 text-sm font-medium">{lang === 'th' ? 'ยังไม่มีขอบเขตงานในตาราง' : 'No tasks available.'}</p>
+                <p className="text-xs text-slate-400 mt-1">{lang === 'th' ? 'ใช้กล่องด้านบนเพื่อเพิ่มขอบเขตงานหลักแรกของคุณ' : 'Use the form above to add your first task.'}</p>
+              </div>
             ) : (
-              <div className="relative pt-6">
-                {/* Timeline Header */}
-                <div className="flex border-b border-slate-200 pb-2 mb-4 text-[10px] text-slate-500 relative pl-[240px]">
-                  <div className="absolute left-0 bottom-2 w-[230px] font-semibold text-slate-700 text-xs">{lang === 'th' ? 'ขอบเขตงาน / หัวข้อย่อย' : 'Task Scope'}</div>
-                  <div className="flex-1 flex justify-between font-mono">
-                    <span>{format(minDate, 'dd MMM yyyy')}</span>
-                    <span>{format(maxDate, 'dd MMM yyyy')}</span>
+              <div className="relative pt-2">
+                {/* Timeline Header (Days Numbers Header - No Calendar Dates) */}
+                <div className="flex border-b-2 border-slate-300 pb-2 mb-4 text-[10px] text-slate-700 relative pl-[240px] bg-slate-100/60 p-2 rounded-t-lg">
+                  <div className="absolute left-3 bottom-2 w-[230px] font-bold text-slate-800 text-xs">
+                    {lang === 'th' ? 'รายการขอบเขตงาน / งานย่อย' : 'Task Scope'}
+                  </div>
+                  <div className="flex-1 relative h-6 font-mono">
+                    {Array.from({ length: totalDays }, (_, i) => i + 1)
+                      .filter(dayNum => {
+                        if (totalDays <= 25) return true;
+                        if (totalDays <= 50) return dayNum === 1 || dayNum % 2 === 0 || dayNum === totalDays;
+                        if (totalDays <= 100) return dayNum === 1 || dayNum % 5 === 0 || dayNum === totalDays;
+                        return dayNum === 1 || dayNum % 10 === 0 || dayNum === totalDays;
+                      })
+                      .map((dayNum) => {
+                        const percent = totalDays > 1 ? ((dayNum - 1) / (totalDays - 1)) * 100 : 0;
+                        return (
+                          <div
+                            key={dayNum}
+                            className="absolute flex flex-col items-center transform -translate-x-1/2"
+                            style={{ left: `${percent}%` }}
+                          >
+                            <span className="font-bold text-[10px] text-slate-800 whitespace-nowrap">
+                              {lang === 'th' ? `วันที่ ${dayNum}` : `Day ${dayNum}`}
+                            </span>
+                            <div className="h-2 w-0.5 bg-slate-400 mt-0.5 rounded-full" />
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
 
@@ -883,6 +1128,9 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                     const mStartOffset = differenceInDays(mainDates.start, minDate);
                     const mStart = Math.max(0, (mStartOffset / totalDays) * 100);
                     const mWidth = Math.min(100 - mStart, (mainDates.duration / totalDays) * 100);
+
+                    const mStartDayNum = Math.max(1, differenceInDays(mainDates.start, minDate) + 1);
+                    const mEndDayNum = Math.max(1, differenceInDays(mainDates.end, minDate) + 1);
 
                     const mainProgress = hasSubs 
                       ? (subScopes.length > 0 ? Math.round(subScopes.reduce((acc, s) => acc + (s.progress || 0), 0) / subScopes.length) : 0)
@@ -903,20 +1151,29 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                     return (
                       <div key={main.id} className="space-y-2">
                         {/* Parent Bar */}
-                        <div className="relative flex items-center bg-slate-50 p-1 rounded border border-slate-200">
+                        <div className="relative flex items-center bg-slate-50 p-1.5 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors">
                           <div className="w-[230px] flex-shrink-0 text-xs text-slate-900 font-bold truncate pr-2 flex items-center justify-between">
                             <div className="flex items-center truncate">
                               <span className="w-5 text-slate-500 text-[11px] text-center flex-shrink-0">{mainIdx + 1}.</span>
                               <span title={main.taskName} className="truncate">{main.taskName}</span>
                             </div>
-                            <button
-                              onClick={() => setShowSubInput({ ...showSubInput, [main.id]: !showSubInput[main.id] })}
-                              className="ml-1 px-1.5 py-0.5 text-[10px] bg-blue-50 hover:bg-blue-100 text-[#0061FF] rounded font-semibold flex items-center gap-0.5 flex-shrink-0"
-                              title={lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task'}
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>{lang === 'th' ? 'ย่อย' : 'Sub'}</span>
-                            </button>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => setShowSubInput({ ...showSubInput, [main.id]: !showSubInput[main.id] })}
+                                className="px-1.5 py-0.5 text-[10px] bg-blue-50 hover:bg-blue-100 text-[#0061FF] rounded font-semibold flex items-center gap-0.5"
+                                title={lang === 'th' ? 'เพิ่มขอบเขตงานย่อย' : 'Add Sub Task'}
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>{lang === 'th' ? 'ย่อย' : 'Sub'}</span>
+                              </button>
+                              <button
+                                onClick={() => handleDelete(main.id)}
+                                className="p-0.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
+                                title={lang === 'th' ? 'ลบงาน' : 'Delete task'}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
                           
                           <div className="flex-1 h-7 relative bg-white rounded border border-slate-100 overflow-hidden">
@@ -925,7 +1182,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                               <div 
                                 className="absolute top-1 h-5 rounded bg-blue-100 border border-blue-400/70 overflow-hidden flex items-center shadow-xs"
                                 style={{ left: `${mStart}%`, width: `${mWidth}%` }}
-                                title={`${lang === 'th' ? 'แผนงาน' : 'Baseline'} ${main.taskName}: ${format(mainDates.start, 'dd/MM/yyyy')} - ${format(mainDates.end, 'dd/MM/yyyy')} (${mainDates.duration} ${lang === 'th' ? 'วัน' : 'days'})`}
+                                title={`${lang === 'th' ? 'แผนงาน' : 'Baseline'} ${main.taskName}: ${lang === 'th' ? `วันที่ ${mStartDayNum} - ${mEndDayNum}` : `Day ${mStartDayNum} - ${mEndDayNum}`} (${mainDates.duration} ${lang === 'th' ? 'วัน' : 'days'})`}
                               >
                                 {/* Inner Actual Progress Fill inside Baseline */}
                                 {mAWidth === 0 && mainProgress > 0 && (
@@ -935,7 +1192,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                                   />
                                 )}
                                 <span className="absolute left-2 text-[10px] font-bold text-slate-800 whitespace-nowrap drop-shadow-xs z-10">
-                                  {mainDates.duration} {lang === 'th' ? 'วัน' : 'd'} ({mainProgress}%)
+                                  {lang === 'th' ? `วันที่ ${mStartDayNum}-${mEndDayNum}` : `Day ${mStartDayNum}-${mEndDayNum}`} ({mainDates.duration}d | {mainProgress}%)
                                 </span>
                               </div>
                             )}
@@ -945,7 +1202,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                               <div 
                                 className={`absolute top-1.5 h-4 rounded opacity-90 shadow-sm flex items-center px-1.5 ${mainProgress === 100 ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'}`}
                                 style={{ left: `${mAStart}%`, width: `${mAWidth}%` }}
-                                title={`${lang === 'th' ? 'ผลจริง' : 'Actual'} ${main.taskName}: ${main.actualStartDate} - ${main.actualEndDate || 'Ongoing'}`}
+                                title={`${lang === 'th' ? 'ผลจริง' : 'Actual'} ${main.taskName}: ${mainProgress}%`}
                               >
                                 <span className="text-[9px] font-bold truncate">
                                   {lang === 'th' ? 'จริง' : 'Act'}: {mainProgress}%
@@ -961,6 +1218,9 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                           const sStartOffset = differenceInDays(subDates.start, minDate);
                           const sStart = Math.max(0, (sStartOffset / totalDays) * 100);
                           const sWidth = Math.min(100 - sStart, (subDates.duration / totalDays) * 100);
+
+                          const sStartDayNum = Math.max(1, differenceInDays(subDates.start, minDate) + 1);
+                          const sEndDayNum = Math.max(1, differenceInDays(subDates.end, minDate) + 1);
 
                           let aStart = 0;
                           let aWidth = 0;
@@ -978,10 +1238,19 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
                           return (
                             <div key={sub.id} className="relative flex items-center pl-4">
-                              <div className="w-[214px] flex-shrink-0 text-xs text-slate-600 font-medium truncate pr-3 flex items-center">
-                                <CornerDownRight className="w-3 h-3 text-slate-400 mr-1 flex-shrink-0" />
-                                <span className="text-[10px] text-slate-400 mr-1">{mainIdx + 1}.{subIdx + 1}</span>
-                                <span title={sub.taskName} className="truncate">{sub.taskName}</span>
+                              <div className="w-[214px] flex-shrink-0 text-xs text-slate-600 font-medium truncate pr-2 flex items-center justify-between">
+                                <div className="flex items-center truncate">
+                                  <CornerDownRight className="w-3 h-3 text-slate-400 mr-1 flex-shrink-0" />
+                                  <span className="text-[10px] text-slate-400 mr-1">{mainIdx + 1}.{subIdx + 1}</span>
+                                  <span title={sub.taskName} className="truncate">{sub.taskName}</span>
+                                </div>
+                                <button
+                                  onClick={() => handleDelete(sub.id)}
+                                  className="p-0.5 text-slate-300 hover:text-red-600 rounded"
+                                  title={lang === 'th' ? 'ลบงานย่อย' : 'Delete sub task'}
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </button>
                               </div>
                               
                               <div className="flex-1 h-7 relative bg-slate-50/50 rounded border border-slate-100 overflow-hidden">
@@ -990,7 +1259,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                                   <div 
                                     className="absolute top-1 h-5 rounded bg-blue-100/90 border border-blue-400/80 overflow-hidden flex items-center"
                                     style={{ left: `${sStart}%`, width: `${sWidth}%` }}
-                                    title={`${lang === 'th' ? 'แผนงาน' : 'Baseline'} ${sub.taskName}: ${format(subDates.start, 'dd/MM/yyyy')} - ${format(subDates.end, 'dd/MM/yyyy')}`}
+                                    title={`${lang === 'th' ? 'แผนงาน' : 'Baseline'} ${sub.taskName}: ${lang === 'th' ? `วันที่ ${sStartDayNum} - ${sEndDayNum}` : `Day ${sStartDayNum} - ${sEndDayNum}`} (${subDates.duration} ${lang === 'th' ? 'วัน' : 'days'})`}
                                   >
                                     {/* Inner Actual Progress Fill inside Baseline when no custom actual date bar */}
                                     {aWidth === 0 && (sub.progress || 0) > 0 && (
@@ -1000,7 +1269,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                                       />
                                     )}
                                     <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 whitespace-nowrap z-10">
-                                      {sub.progress}%
+                                      {lang === 'th' ? `วันที่ ${sStartDayNum}-${sEndDayNum}` : `D${sStartDayNum}-${sEndDayNum}`} ({sub.progress}%)
                                     </span>
                                   </div>
                                 )}
@@ -1010,7 +1279,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                                   <div 
                                     className={`absolute top-1.5 h-4 rounded opacity-90 shadow-xs flex items-center px-1 ${sub.progress === 100 ? 'bg-emerald-500 text-white' : 'bg-orange-500 text-white'}`}
                                     style={{ left: `${aStart}%`, width: `${aWidth}%` }}
-                                    title={`${lang === 'th' ? 'ผลจริง' : 'Actual'} ${sub.taskName}: ${sub.actualStartDate} - ${sub.actualEndDate || 'Ongoing'}`}
+                                    title={`${lang === 'th' ? 'ผลจริง' : 'Actual'} ${sub.taskName}: ${sub.progress}%`}
                                   >
                                     <span className="text-[9px] font-bold truncate">
                                       {sub.progress}%
@@ -1024,10 +1293,10 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
                         {/* Inline subtask input for Gantt view */}
                         {showSubInput[main.id] && (
-                          <div className="flex items-center pl-4 py-1 bg-blue-50/60 rounded border border-blue-100 my-1 text-xs">
+                          <div className="flex items-center pl-4 py-1.5 bg-blue-50/80 rounded-lg border border-blue-200 my-1 text-xs shadow-2xs">
                             <div className="w-[214px] flex-shrink-0 flex items-center gap-1 pr-2">
-                              <CornerDownRight className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                              <span className="text-[10px] text-blue-600 font-bold">{mainIdx + 1}.{subScopes.length + 1}</span>
+                              <CornerDownRight className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                              <span className="text-[10px] text-blue-700 font-bold">{mainIdx + 1}.{subScopes.length + 1}</span>
                             </div>
                             <div className="flex-1 flex items-center gap-2">
                               <input
@@ -1035,15 +1304,16 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                                 value={subTaskInputs[main.id] || ''}
                                 onChange={(e) => setSubTaskInputs({ ...subTaskInputs, [main.id]: e.target.value })}
                                 placeholder={lang === 'th' ? 'กรอกชื่อขอบเขตงานย่อย แล้วกด Enter...' : 'Enter sub-task name...'}
-                                className="flex-1 px-2.5 py-1 text-xs border border-blue-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
+                                className="flex-1 px-2.5 py-1 text-xs border border-blue-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
                                 onKeyDown={(e) => e.key === 'Enter' && handleAddSub(main.id)}
                                 autoFocus
                               />
                               <button
                                 onClick={() => handleAddSub(main.id)}
-                                className="px-3 py-1 bg-[#0061FF] text-white rounded text-xs font-semibold hover:bg-blue-700 flex-shrink-0"
+                                className="px-3 py-1 bg-[#0061FF] text-white rounded text-xs font-semibold hover:bg-blue-700 flex-shrink-0 flex items-center gap-1"
                               >
-                                {lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task'}
+                                <Plus className="w-3 h-3" />
+                                <span>{lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task'}</span>
                               </button>
                               <button
                                 onClick={() => setShowSubInput({ ...showSubInput, [main.id]: false })}
@@ -1058,6 +1328,21 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                     );
                   })}
                 </div>
+
+                {/* Bottom Quick Add Sub/Main Trigger */}
+                <div className="mt-4 pt-3 border-t border-slate-200 flex justify-start">
+                  <button
+                    onClick={() => {
+                      const el = document.querySelector('input[placeholder*="ขอบเขตงานหลัก"]') as HTMLInputElement;
+                      if (el) el.focus();
+                    }}
+                    className="text-xs font-bold text-[#0061FF] hover:text-blue-800 flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-md border border-blue-200/60 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{lang === 'th' ? '+ เพิ่มขอบเขตงานหลักใหม่' : '+ Add New Main Task Scope'}</span>
+                  </button>
+                </div>
+
                 
                 {/* Legend */}
                 <div className="mt-8 flex items-center justify-center gap-6 text-[10px] text-slate-600 border-t pt-4 border-slate-200">
@@ -1422,10 +1707,10 @@ function SchedulePlanPDFReport({
           </div>
 
           <div className="border border-slate-300 rounded p-2 bg-slate-50/50">
-            {/* Timeline Header */}
-            <div className="flex justify-between text-[9px] text-slate-600 font-mono font-bold border-b border-slate-300 pb-1 mb-1.5 pl-[150px]">
-              <span>{format(minDate, 'dd/MM/yyyy')}</span>
-              <span>{format(maxDate, 'dd/MM/yyyy')}</span>
+            {/* Timeline Header (Day Numbers) */}
+            <div className="flex justify-between text-[9px] text-slate-700 font-mono font-bold border-b border-slate-300 pb-1 mb-1.5 pl-[150px]">
+              <span>{lang === 'th' ? 'วันที่ 1' : 'Day 1'}</span>
+              <span>{lang === 'th' ? `วันที่ ${totalDays} (รวม ${totalDays} วัน)` : `Day ${totalDays} (${totalDays} days)`}</span>
             </div>
 
             {/* Task Timeline Bars */}
