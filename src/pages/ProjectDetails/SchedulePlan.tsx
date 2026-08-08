@@ -984,7 +984,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       <style>{`
         @media print {
           @page {
-            size: ${paperSize.toUpperCase()} landscape;
+            size: ${paperSize.toUpperCase()} ${pdfOrientation};
             margin: 6mm;
           }
           body {
@@ -2181,6 +2181,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
           pdfIncludeSignatures={pdfIncludeSignatures}
           pdfNotesText={pdfNotesText}
           getItemProgress={getItemProgress}
+          pdfOrientation={pdfOrientation}
+          paperSize={paperSize}
         />
       </div>
 
@@ -2734,7 +2736,9 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
             {/* PDF Render Preview Area */}
             <div className="p-6 overflow-y-auto flex-1 bg-slate-200">
-              <div className="bg-white shadow-lg mx-auto max-w-4xl rounded-sm p-2">
+              <div className={`bg-white shadow-lg mx-auto rounded-sm p-2 transition-all ${
+                pdfOrientation === 'landscape' ? 'max-w-6xl w-full' : 'max-w-4xl w-full'
+              }`}>
                 <SchedulePlanPDFReport
                   project={project}
                   mainScopes={mainScopes}
@@ -2750,6 +2754,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                   pdfIncludeSignatures={pdfIncludeSignatures}
                   pdfNotesText={pdfNotesText}
                   getItemProgress={getItemProgress}
+                  pdfOrientation={pdfOrientation}
+                  paperSize={paperSize}
                 />
               </div>
             </div>
@@ -2776,6 +2782,8 @@ function SchedulePlanPDFReport({
   pdfIncludeSignatures,
   pdfNotesText,
   getItemProgress,
+  pdfOrientation = 'landscape',
+  paperSize = 'a4',
 }: {
   project: any;
   mainScopes: ScopeType[];
@@ -2791,6 +2799,8 @@ function SchedulePlanPDFReport({
   pdfIncludeSignatures: boolean;
   pdfNotesText: string;
   getItemProgress: (s: ScopeType) => number;
+  pdfOrientation?: 'landscape' | 'portrait';
+  paperSize?: 'a4' | 'a3';
 }) {
   const subTasksCount = projectScopes.filter(s => s.parentId).length;
   const totalPlannedDays = Math.max(1, differenceInDays(maxDate, projectStartDate) + 1);
