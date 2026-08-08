@@ -97,6 +97,9 @@ export interface Installment {
   periodNumber: number;
   amount: number;
   dueDate: string;
+  percentage?: number;
+  note?: string;
+  status?: 'pending' | 'paid';
 }
 
 export interface Worker {
