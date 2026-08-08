@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { Plus, Search, Calendar, MapPin, ChevronRight, FolderKanban, LayoutGrid, List, Trash2, X, Check, FolderPlus } from 'lucide-react';
+import { Plus, Search, Calendar, MapPin, ChevronRight, FolderKanban, LayoutGrid, List, Trash2, X, Check, FolderPlus, Filter, RotateCcw } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { differenceInDays, parseISO, format } from 'date-fns';
 
@@ -11,6 +11,10 @@ interface ProjectsProps {
 export function Projects({ navigate }: ProjectsProps) {
   const { data, updateData } = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedCustomer, setSelectedCustomer] = useState<string>('all');
+  const [selectedSalesperson, setSelectedSalesperson] = useState<string>('all');
+  const [selectedManager, setSelectedManager] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'board'>('list');
   const [sortBy, setSortBy] = useState<'active-first' | 'name-asc' | 'date-desc' | 'date-asc'>('active-first');
   const lang = data.language || 'th';
@@ -90,18 +94,64 @@ export function Projects({ navigate }: ProjectsProps) {
     }
   };
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setSelectedStatus('all');
+    setSelectedCustomer('all');
+    setSelectedSalesperson('all');
+    setSelectedManager('all');
+  };
+
+  const hasActiveFilters = searchTerm !== '' || selectedStatus !== 'all' || selectedCustomer !== 'all' || selectedSalesperson !== 'all' || selectedManager !== 'all';
+
   const filteredProjects = data.projects.filter(p => {
-    const searchLower = searchTerm.toLowerCase();
+    const searchLower = searchTerm.trim().toLowerCase();
     const customer = data.customers.find(c => c.id === p.customerId)?.name.toLowerCase() || '';
     const owner = data.owners.find(o => o.id === p.ownerId)?.name.toLowerCase() || '';
     const salesperson = data.salespersons.find(s => s.id === p.salespersonId)?.name.toLowerCase() || '';
     const manager = data.projectManagers.find(m => m.id === p.managerId)?.name.toLowerCase() || '';
-    
-    return p.name.toLowerCase().includes(searchLower) ||
-           customer.includes(searchLower) ||
-           owner.includes(searchLower) ||
-           salesperson.includes(searchLower) ||
-           manager.includes(searchLower);
+    const poNumber = (p.purchaseOrder || '').toLowerCase();
+    const locationStr = (p.location || '').toLowerCase();
+
+    // 1. Text Search Filter
+    const matchesSearch = !searchLower ||
+      p.name.toLowerCase().includes(searchLower) ||
+      customer.includes(searchLower) ||
+      owner.includes(searchLower) ||
+      salesperson.includes(searchLower) ||
+      manager.includes(searchLower) ||
+      poNumber.includes(searchLower) ||
+      locationStr.includes(searchLower);
+
+    if (!matchesSearch) return false;
+
+    // 2. Status Filter
+    if (selectedStatus !== 'all') {
+      if (selectedStatus === 'active') {
+        if (isProjectClosed(p)) return false;
+      } else if (selectedStatus === 'closed') {
+        if (!isProjectClosed(p)) return false;
+      } else {
+        if (p.statusId !== selectedStatus) return false;
+      }
+    }
+
+    // 3. Customer / Company Filter
+    if (selectedCustomer !== 'all') {
+      if (p.customerId !== selectedCustomer) return false;
+    }
+
+    // 4. Salesperson Filter
+    if (selectedSalesperson !== 'all') {
+      if (p.salespersonId !== selectedSalesperson) return false;
+    }
+
+    // 5. Project Manager Filter
+    if (selectedManager !== 'all') {
+      if (p.managerId !== selectedManager) return false;
+    }
+
+    return true;
   });
 
   const sortedProjects = [...filteredProjects].sort((a, b) => {
@@ -133,61 +183,168 @@ export function Projects({ navigate }: ProjectsProps) {
         </div>
         <button
           onClick={handleOpenCreateModal}
-          className="px-4 py-2 bg-[#0061FF] text-white rounded text-xs font-semibold hover:bg-blue-700 flex items-center gap-2 transition-all"
+          className="px-4 py-2 bg-[#0061FF] text-white rounded text-xs font-semibold hover:bg-blue-700 flex items-center gap-2 transition-all shadow-sm"
         >
           <Plus className="w-4 h-4" />
           {lang === 'th' ? 'โครงการใหม่' : 'New Project'}
         </button>
       </div>
 
-      <div className="bg-white p-3 rounded-lg border border-slate-200 flex gap-4 items-center justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder={lang === 'th' ? 'ค้นหาชื่อโครงการ, ชื่อบริษัท, เจ้าของ, ฝ่ายขาย, ผจก.โครงการ...' : 'Search projects, companies, owners, sales, managers...'}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#0061FF] focus:bg-white transition-all"
-          />
-        </div>
-        <div className="flex gap-4 items-center">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-600">{lang === 'th' ? 'เรียงตาม:' : 'Sort by:'}</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="text-sm border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
-            >
-              <option value="active-first">{lang === 'th' ? 'ดำเนินการอยู่ก่อน' : 'Active First'}</option>
-              <option value="name-asc">{lang === 'th' ? 'ชื่อ (A-Z)' : 'Name (A-Z)'}</option>
-              <option value="date-desc">{lang === 'th' ? 'วันที่เริ่ม (ใหม่สุด)' : 'Start Date (Newest)'}</option>
-              <option value="date-asc">{lang === 'th' ? 'วันที่เริ่ม (เก่าสุด)' : 'Start Date (Oldest)'}</option>
-            </select>
+      {/* Filter and Search Bar Container */}
+      <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-3 shadow-xs">
+        <div className="flex flex-wrap gap-3 items-center justify-between">
+          {/* Search Input */}
+          <div className="relative flex-1 min-w-[240px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder={lang === 'th' ? 'ค้นหาชื่อโครงการ, บริษัท, สัญญา, ผจก....' : 'Search projects, companies, PO, managers...'}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0061FF] focus:bg-white transition-all"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                title={lang === 'th' ? 'ล้างคำค้นหา' : 'Clear search'}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-          <div className="flex bg-slate-100 p-1 rounded-md">
-            <button
-            onClick={() => setViewMode('list')}
-            className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-500 hover:text-slate-800'}`}
-            title={lang === 'th' ? 'มุมมองแบบรายการ' : 'List View'}
-          >
-            <List className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-500 hover:text-slate-800'}`}
-            title={lang === 'th' ? 'มุมมองแบบกริด' : 'Grid View'}
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('board')}
-            className={`p-1.5 rounded transition-colors ${viewMode === 'board' ? 'bg-white shadow text-[#0061FF]' : 'text-slate-500 hover:text-slate-800'}`}
-            title={lang === 'th' ? 'มุมมองแบบบอร์ด' : 'Board View'}
-          >
-            <FolderKanban className="w-4 h-4" />
-          </button>
+
+          <div className="flex flex-wrap gap-2 items-center">
+            {/* Filter by Status Dropdown */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg text-xs">
+              <Filter className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+              <span className="font-medium text-slate-600 whitespace-nowrap">{lang === 'th' ? 'สถานะ:' : 'Status:'}</span>
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="bg-transparent text-slate-800 font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="all">{lang === 'th' ? 'ทุกสถานะ' : 'All Statuses'}</option>
+                <option value="active">{lang === 'th' ? '⚡ ดำเนินการอยู่' : '⚡ Active Only'}</option>
+                <option value="closed">{lang === 'th' ? '✅ ปิดโครงการแล้ว' : '✅ Closed Only'}</option>
+                {(data.projectStatuses || []).map(st => (
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter by Customer / Company Dropdown */}
+            {data.customers.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg text-xs">
+                <span className="font-medium text-slate-600 whitespace-nowrap">{lang === 'th' ? 'ลูกค้า/บริษัท:' : 'Customer:'}</span>
+                <select
+                  value={selectedCustomer}
+                  onChange={(e) => setSelectedCustomer(e.target.value)}
+                  className="bg-transparent text-slate-800 font-medium focus:outline-none cursor-pointer max-w-[150px] truncate"
+                >
+                  <option value="all">{lang === 'th' ? 'ทุกลูกค้า' : 'All Customers'}</option>
+                  {data.customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Filter by Salesperson Dropdown */}
+            {data.salespersons.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg text-xs">
+                <span className="font-medium text-slate-600 whitespace-nowrap">{lang === 'th' ? 'ฝ่ายขาย:' : 'Sales:'}</span>
+                <select
+                  value={selectedSalesperson}
+                  onChange={(e) => setSelectedSalesperson(e.target.value)}
+                  className="bg-transparent text-slate-800 font-medium focus:outline-none cursor-pointer max-w-[150px] truncate"
+                >
+                  <option value="all">{lang === 'th' ? 'ทุกฝ่ายขาย' : 'All Sales'}</option>
+                  {data.salespersons.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Filter by Project Manager Dropdown */}
+            {data.projectManagers.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg text-xs">
+                <span className="font-medium text-slate-600 whitespace-nowrap">{lang === 'th' ? 'ผจก.โครงการ:' : 'Manager:'}</span>
+                <select
+                  value={selectedManager}
+                  onChange={(e) => setSelectedManager(e.target.value)}
+                  className="bg-transparent text-slate-800 font-medium focus:outline-none cursor-pointer max-w-[150px] truncate"
+                >
+                  <option value="all">{lang === 'th' ? 'ทุก ผจก.' : 'All Managers'}</option>
+                  {data.projectManagers.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Sort Dropdown */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-lg text-xs">
+              <span className="font-medium text-slate-600 whitespace-nowrap">{lang === 'th' ? 'เรียงตาม:' : 'Sort:'}</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="bg-transparent text-slate-800 font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="active-first">{lang === 'th' ? 'ดำเนินการอยู่ก่อน' : 'Active First'}</option>
+                <option value="name-asc">{lang === 'th' ? 'ชื่อ (A-Z)' : 'Name (A-Z)'}</option>
+                <option value="date-desc">{lang === 'th' ? 'วันที่เริ่ม (ใหม่สุด)' : 'Start Date (Newest)'}</option>
+                <option value="date-asc">{lang === 'th' ? 'วันที่เริ่ม (เก่าสุด)' : 'Start Date (Oldest)'}</option>
+              </select>
+            </div>
+
+            {/* View Mode Switcher */}
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1 rounded transition-colors ${viewMode === 'list' ? 'bg-white shadow-xs text-[#0061FF]' : 'text-slate-500 hover:text-slate-800'}`}
+                title={lang === 'th' ? 'มุมมองแบบรายการ' : 'List View'}
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1 rounded transition-colors ${viewMode === 'grid' ? 'bg-white shadow-xs text-[#0061FF]' : 'text-slate-500 hover:text-slate-800'}`}
+                title={lang === 'th' ? 'มุมมองแบบกริด' : 'Grid View'}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('board')}
+                className={`p-1 rounded transition-colors ${viewMode === 'board' ? 'bg-white shadow-xs text-[#0061FF]' : 'text-slate-500 hover:text-slate-800'}`}
+                title={lang === 'th' ? 'มุมมองแบบบอร์ด' : 'Board View'}
+              >
+                <FolderKanban className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
+
+        {/* Filter Status Summary & Reset Button */}
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
+          <div>
+            {lang === 'th'
+              ? `แสดงผล ${sortedProjects.length} จากทั้งหมด ${data.projects.length} โครงการ`
+              : `Showing ${sortedProjects.length} of ${data.projects.length} projects`}
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              onClick={resetFilters}
+              className="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-semibold transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{lang === 'th' ? 'ล้างตัวกรอง' : 'Reset Filters'}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -457,7 +614,16 @@ export function Projects({ navigate }: ProjectsProps) {
         <div className="col-span-full text-center py-12 bg-white rounded-2xl border border-dashed border-slate-300">
           <FolderKanban className="w-12 h-12 text-slate-300 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-slate-700">{lang === 'th' ? 'ไม่พบโครงการ' : 'No projects found'}</h3>
-          <p className="text-slate-500 mt-1">{lang === 'th' ? 'ลองค้นหาด้วยคำอื่นหรือสร้างโครงการใหม่' : 'Try a different search term or create a new project.'}</p>
+          <p className="text-slate-500 mt-1 text-xs">{lang === 'th' ? 'ลองค้นหาด้วยคำอื่นหรือล้างตัวกรองเพื่อแสดงโครงการทั้งหมด' : 'Try a different search term or reset filters to show all projects.'}</p>
+          {hasActiveFilters && (
+            <button
+              onClick={resetFilters}
+              className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+              <span>{lang === 'th' ? 'ล้างตัวกรองทั้งหมด' : 'Reset All Filters'}</span>
+            </button>
+          )}
         </div>
       )}
 

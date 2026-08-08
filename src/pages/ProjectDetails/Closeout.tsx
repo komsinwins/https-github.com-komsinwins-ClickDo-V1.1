@@ -221,7 +221,7 @@ export function Closeout({ projectId }: { projectId: string }) {
 
       <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
         <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-200">
-          {lang === 'th' ? 'ขอบเขตงานและขั้นตอนการทำงาน (อ้างอิงจากแผนการดำเนินงาน)' : 'Scope of Work & Work Steps (From Operational Plan)'}
+          {lang === 'th' ? 'ขอบเขตงานและขั้นตอนการทำงาน' : 'Scope of Work & Work Steps'}
         </h4>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm border-collapse bg-white border border-slate-200 rounded">
@@ -433,117 +433,125 @@ export function Closeout({ projectId }: { projectId: string }) {
       <div className="hidden print:block w-full bg-white text-black font-sans p-2">
         
         {/* Document Header Banner */}
-        <div className="flex justify-between items-center bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white p-6 rounded-xl shadow-md border-l-8 border-blue-500 mb-8">
+        <div className="flex justify-between items-center bg-slate-800 text-white p-5 rounded-lg shadow-sm border-l-4 border-slate-600 mb-6">
           <div>
-            <span className="text-xs font-semibold tracking-widest text-blue-300 uppercase block mb-1">
+            <span className="text-xs font-medium tracking-wider text-slate-300 uppercase block mb-0.5">
               {lang === 'th' ? 'เอกสารสรุปปิดโครงการ' : 'Project Closeout Document'}
             </span>
-            <h1 className="text-2xl font-extrabold uppercase tracking-tight text-white">
+            <h1 className="text-xl font-bold uppercase tracking-tight text-white">
               {lang === 'th' ? 'รายงานสรุปโครงการ' : 'Project Summary Report'}
             </h1>
-            <p className="text-blue-100 mt-1 text-sm font-medium">{project?.name}</p>
+            <p className="text-slate-200 mt-0.5 text-xs font-medium">{project?.name}</p>
           </div>
-          <div className="text-right border-l border-blue-800/80 pl-6">
-            <p className="text-xs text-blue-300">{lang === 'th' ? 'วันที่พิมพ์รายงาน' : 'Report Date'}</p>
-            <p className="text-sm font-bold text-white mt-0.5">{formatDate(new Date().toISOString())}</p>
+          <div className="text-right border-l border-slate-600 pl-5">
+            <p className="text-[11px] text-slate-300">{lang === 'th' ? 'วันที่พิมพ์รายงาน' : 'Report Date'}</p>
+            <p className="text-xs font-bold text-white mt-0.5">{formatDate(new Date().toISOString())}</p>
           </div>
         </div>
         
-        {/* Section: Project Details */}
-        <div className="mb-8 break-inside-avoid">
-          <h2 className="text-base font-bold bg-gradient-to-r from-blue-900 to-indigo-800 text-white p-2.5 px-4 mb-0 rounded-t-lg shadow-sm border-b-2 border-blue-500">
+        {/* Section: Project Details (Line by Line Format) */}
+        <div className="mb-6 break-inside-avoid">
+          <h2 className="text-sm font-bold bg-slate-800 text-white p-2.5 px-4 mb-0 rounded-t-lg">
             {lang === 'th' ? 'รายละเอียดโครงการ' : 'Project Details'}
           </h2>
-          <div className="border border-blue-200 rounded-b-lg p-5 bg-white shadow-sm">
-            <table className="w-full text-sm">
-              <tbody>
-                <tr className="border-b border-slate-100">
-                  <td className="py-2.5 pr-4 font-semibold text-blue-950 w-1/4 align-top bg-blue-50/40 px-3 rounded-l">{lang === 'th' ? 'ชื่อโครงการ:' : 'Project Name:'}</td>
-                  <td className="py-2.5 pr-4 w-1/4 align-top px-3">{project?.name || '-'}</td>
-                  <td className="py-2.5 pr-4 font-semibold text-blue-950 w-1/4 align-top bg-blue-50/40 px-3 rounded-l">{lang === 'th' ? 'เจ้าของโครงการ:' : 'Owner:'}</td>
-                  <td className="py-2.5 w-1/4 align-top px-3">{ownerName}</td>
+          <div className="border border-slate-300 rounded-b-lg overflow-hidden bg-white">
+            <table className="w-full text-xs">
+              <tbody className="divide-y divide-slate-200">
+                <tr className="hover:bg-slate-50">
+                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'ชื่อโครงการ:' : 'Project Name:'}</td>
+                  <td className="py-2 px-4 text-slate-900 font-medium">{project?.name || '-'}</td>
                 </tr>
-                <tr className="border-b border-slate-100">
-                  <td className="py-2.5 pr-4 font-semibold text-blue-950 align-top bg-blue-50/40 px-3 rounded-l">{lang === 'th' ? 'สถานที่ติดตั้ง:' : 'Location:'}</td>
-                  <td className="py-2.5 pr-4 align-top px-3">{project?.location || '-'}</td>
-                  <td className="py-2.5 pr-4 font-semibold text-blue-950 align-top bg-blue-50/40 px-3 rounded-l">{lang === 'th' ? 'พื้นที่ติดตั้ง:' : 'Area:'}</td>
-                  <td className="py-2.5 align-top px-3">{project?.installationArea || '-'}</td>
+                <tr className="hover:bg-slate-50">
+                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'เจ้าของโครงการ:' : 'Owner:'}</td>
+                  <td className="py-2 px-4 text-slate-900">{ownerName}</td>
                 </tr>
-                <tr className="border-b border-slate-100">
-                  <td className="py-2.5 pr-4 font-semibold text-blue-950 align-top bg-blue-50/40 px-3 rounded-l">{lang === 'th' ? 'ผู้จัดการโครงการ:' : 'Project Manager:'}</td>
-                  <td className="py-2.5 pr-4 align-top px-3">{managerName}</td>
-                  <td className="py-2.5 pr-4 font-semibold text-blue-950 align-top bg-blue-50/40 px-3 rounded-l">{lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start Date:'}</td>
-                  <td className="py-2.5 align-top px-3">{formatDate(project?.startDate)}</td>
+                <tr className="hover:bg-slate-50">
+                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'สถานที่ติดตั้ง:' : 'Location:'}</td>
+                  <td className="py-2 px-4 text-slate-900">{project?.location || '-'}</td>
                 </tr>
-                <tr>
-                  <td className="py-2.5 pr-4 font-semibold text-blue-950 align-top bg-blue-50/40 px-3 rounded-l">{lang === 'th' ? 'วันที่สิ้นสุด (แผนงาน):' : 'Planned End:'}</td>
-                  <td className="py-2.5 pr-4 align-top px-3">{formatDate(project?.endDate)}</td>
-                  <td className="py-2.5 pr-4 font-semibold text-blue-950 align-top bg-blue-50/40 px-3 rounded-l">{lang === 'th' ? 'วันที่สิ้นสุด (จริง):' : 'Actual End:'}</td>
-                  <td className="py-2.5 align-top px-3">{formatDate(project?.actualCompletionDate)}</td>
+                <tr className="hover:bg-slate-50">
+                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'พื้นที่ติดตั้ง:' : 'Area:'}</td>
+                  <td className="py-2 px-4 text-slate-900">{project?.installationArea || '-'}</td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'ผู้จัดการโครงการ:' : 'Project Manager:'}</td>
+                  <td className="py-2 px-4 text-slate-900">{managerName}</td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start Date:'}</td>
+                  <td className="py-2 px-4 text-slate-900">{formatDate(project?.startDate)}</td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'วันที่สิ้นสุด (แผนงาน):' : 'Planned End:'}</td>
+                  <td className="py-2 px-4 text-slate-900">{formatDate(project?.endDate)}</td>
+                </tr>
+                <tr className="hover:bg-slate-50">
+                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'วันที่สิ้นสุด (จริง):' : 'Actual End:'}</td>
+                  <td className="py-2 px-4 text-slate-900">{formatDate(project?.actualCompletionDate)}</td>
                 </tr>
               </tbody>
             </table>
             {project?.projectDetails && (
-              <div className="mt-4 pt-4 border-t border-slate-200 text-sm">
-                <p className="font-semibold text-blue-950 mb-2">{lang === 'th' ? 'รายละเอียดเพิ่มเติม:' : 'Additional Details:'}</p>
-                <p className="whitespace-pre-wrap text-slate-800 bg-slate-50/80 p-3.5 rounded-lg border border-slate-200">{project.projectDetails}</p>
+              <div className="p-3.5 border-t border-slate-200 text-xs bg-white">
+                <p className="font-semibold text-slate-800 mb-1">{lang === 'th' ? 'รายละเอียดเพิ่มเติม:' : 'Additional Details:'}</p>
+                <p className="whitespace-pre-wrap text-slate-700 bg-slate-50 p-3 rounded border border-slate-200">{project.projectDetails}</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Section: Stakeholders (Full Width) */}
+        {/* Section: Stakeholders */}
         <div className="mb-6 break-inside-avoid">
-          <h2 className="text-base font-bold bg-gradient-to-r from-blue-900 to-indigo-800 text-white p-2.5 px-4 mb-0 rounded-t-lg shadow-sm border-b-2 border-blue-500">
+          <h2 className="text-sm font-bold bg-slate-800 text-white p-2.5 px-4 mb-0 rounded-t-lg">
             {lang === 'th' ? 'ผู้เกี่ยวข้องในโครงการ' : 'Project Stakeholders'}
           </h2>
-          <div className="border border-blue-200 rounded-b-lg overflow-hidden bg-white shadow-sm">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-blue-50/90 text-blue-950 border-b border-blue-200">
+          <div className="border border-slate-300 rounded-b-lg overflow-hidden bg-white">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-100 text-slate-800 border-b border-slate-300">
                 <tr>
-                  <th className="p-3 font-bold">{lang === 'th' ? 'ชื่อ - นามสกุล' : 'Name'}</th>
-                  <th className="p-3 font-bold">{lang === 'th' ? 'หน้าที่' : 'Role'}</th>
-                  <th className="p-3 font-bold">{lang === 'th' ? 'เบอร์โทรศัพท์' : 'Phone'}</th>
+                  <th className="p-2.5 px-3 font-semibold">{lang === 'th' ? 'ชื่อ - นามสกุล' : 'Name'}</th>
+                  <th className="p-2.5 px-3 font-semibold">{lang === 'th' ? 'หน้าที่' : 'Role'}</th>
+                  <th className="p-2.5 px-3 font-semibold">{lang === 'th' ? 'เบอร์โทรศัพท์' : 'Phone'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-200">
                 {projectContacts.length > 0 ? projectContacts.map((c, idx) => (
-                  <tr key={c.id} className={idx % 2 === 1 ? "bg-slate-50/50" : "bg-white"}>
-                    <td className="p-3 font-medium text-slate-900">{c.firstName} {c.lastName}</td>
-                    <td className="p-3 text-slate-700">{c.role || '-'}</td>
-                    <td className="p-3 text-slate-700">{c.phone || '-'}</td>
+                  <tr key={c.id} className={idx % 2 === 1 ? "bg-slate-50/60" : "bg-white"}>
+                    <td className="p-2.5 px-3 font-medium text-slate-900">{c.firstName} {c.lastName}</td>
+                    <td className="p-2.5 px-3 text-slate-700">{c.role || '-'}</td>
+                    <td className="p-2.5 px-3 text-slate-700">{c.phone || '-'}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={3} className="p-4 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูลผู้เกี่ยวข้อง' : 'No stakeholder data'}</td></tr>
+                  <tr><td colSpan={3} className="p-3 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูลผู้เกี่ยวข้อง' : 'No stakeholder data'}</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Section: Workers (Stacked Below Stakeholders) */}
-        <div className="mb-8 break-inside-avoid">
-          <h2 className="text-base font-bold bg-gradient-to-r from-blue-900 to-indigo-800 text-white p-2.5 px-4 mb-0 rounded-t-lg shadow-sm border-b-2 border-blue-500">
+        {/* Section: Workers */}
+        <div className="mb-6 break-inside-avoid">
+          <h2 className="text-sm font-bold bg-slate-800 text-white p-2.5 px-4 mb-0 rounded-t-lg">
             {lang === 'th' ? 'ผู้ปฏิบัติงาน' : 'Workers'}
           </h2>
-          <div className="border border-blue-200 rounded-b-lg overflow-hidden bg-white shadow-sm">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-blue-50/90 text-blue-950 border-b border-blue-200">
+          <div className="border border-slate-300 rounded-b-lg overflow-hidden bg-white">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-100 text-slate-800 border-b border-slate-300">
                 <tr>
-                  <th className="p-3 font-bold">{lang === 'th' ? 'ชื่อ - นามสกุล' : 'Name'}</th>
-                  <th className="p-3 font-bold">{lang === 'th' ? 'หน้าที่ / ตำแหน่ง' : 'Role / Position'}</th>
-                  <th className="p-3 font-bold">{lang === 'th' ? 'เบอร์โทรศัพท์' : 'Phone'}</th>
+                  <th className="p-2.5 px-3 font-semibold">{lang === 'th' ? 'ชื่อ - นามสกุล' : 'Name'}</th>
+                  <th className="p-2.5 px-3 font-semibold">{lang === 'th' ? 'หน้าที่ / ตำแหน่ง' : 'Role / Position'}</th>
+                  <th className="p-2.5 px-3 font-semibold">{lang === 'th' ? 'เบอร์โทรศัพท์' : 'Phone'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-200">
                 {projectWorkers.length > 0 ? projectWorkers.map((w, idx) => (
-                  <tr key={w.id} className={idx % 2 === 1 ? "bg-slate-50/50" : "bg-white"}>
-                    <td className="p-3 font-medium text-slate-900">{w.firstName} {w.lastName}</td>
-                    <td className="p-3 text-slate-700">{w.role || (lang === 'th' ? 'ผู้ปฏิบัติงาน' : 'Worker')}</td>
-                    <td className="p-3 text-slate-700">{w.phone || '-'}</td>
+                  <tr key={w.id} className={idx % 2 === 1 ? "bg-slate-50/60" : "bg-white"}>
+                    <td className="p-2.5 px-3 font-medium text-slate-900">{w.firstName} {w.lastName}</td>
+                    <td className="p-2.5 px-3 text-slate-700">{w.role || (lang === 'th' ? 'ผู้ปฏิบัติงาน' : 'Worker')}</td>
+                    <td className="p-2.5 px-3 text-slate-700">{w.phone || '-'}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={3} className="p-4 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูลผู้ปฏิบัติงาน' : 'No worker data'}</td></tr>
+                  <tr><td colSpan={3} className="p-3 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูลผู้ปฏิบัติงาน' : 'No worker data'}</td></tr>
                 )}
               </tbody>
             </table>
@@ -551,34 +559,34 @@ export function Closeout({ projectId }: { projectId: string }) {
         </div>
 
         {/* Section: Scopes & Schedule */}
-        <div className="mb-8 break-inside-avoid">
-          <h2 className="text-base font-bold bg-gradient-to-r from-blue-900 to-indigo-800 text-white p-2.5 px-4 mb-0 rounded-t-lg shadow-sm border-b-2 border-blue-500">
-            {lang === 'th' ? 'ขอบเขตงานและขั้นตอนการทำงาน (อ้างอิงสถานะจากแผนการดำเนินงาน)' : 'Scope of Work & Work Steps (Status from Schedule Plan)'}
+        <div className="mb-6 break-inside-avoid">
+          <h2 className="text-sm font-bold bg-slate-800 text-white p-2.5 px-4 mb-0 rounded-t-lg">
+            {lang === 'th' ? 'ขอบเขตงานและขั้นตอนการทำงาน' : 'Scope of Work & Work Steps'}
           </h2>
-          <div className="border border-blue-200 rounded-b-lg overflow-hidden bg-white shadow-sm">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-blue-50/90 text-blue-950 border-b border-blue-200">
+          <div className="border border-slate-300 rounded-b-lg overflow-hidden bg-white">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-100 text-slate-800 border-b border-slate-300">
                 <tr>
-                  <th className="p-3 font-bold">{lang === 'th' ? 'รายการขอบเขตงาน / ขั้นตอน' : 'Task / Work Step'}</th>
-                  <th className="p-3 font-bold text-center w-52">{lang === 'th' ? 'สถานะงาน' : 'Status'}</th>
+                  <th className="p-2.5 px-3 font-semibold">{lang === 'th' ? 'รายการขอบเขตงาน / ขั้นตอน' : 'Task / Work Step'}</th>
+                  <th className="p-2.5 px-3 font-semibold text-center w-48">{lang === 'th' ? 'สถานะงาน' : 'Status'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-200">
                 {projectTasks.length > 0 ? projectTasks.map((t, idx) => {
                   const isSubTask = !!t.parentId;
                   const progressVal = t.progress ?? 0;
                   return (
-                    <tr key={t.id} className={idx % 2 === 1 ? "bg-slate-50/40" : "bg-white"}>
-                      <td className={`p-3 ${isSubTask ? 'pl-8 text-xs text-slate-700' : 'font-semibold text-slate-900'}`}>
-                        {isSubTask && <span className="mr-1.5 text-blue-500">↳</span>}
+                    <tr key={t.id} className={idx % 2 === 1 ? "bg-slate-50/50" : "bg-white"}>
+                      <td className={`p-2.5 px-3 ${isSubTask ? 'pl-8 text-xs text-slate-600' : 'font-medium text-slate-900'}`}>
+                        {isSubTask && <span className="mr-1.5 text-slate-400">↳</span>}
                         {t.taskName}
                       </td>
-                      <td className="p-3 text-center">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold border ${
+                      <td className="p-2.5 px-3 text-center">
+                        <span className={`inline-block px-2.5 py-0.5 rounded text-xs font-semibold border ${
                           progressVal === 100 
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
                             : progressVal > 0 
-                            ? 'bg-blue-100 text-blue-800 border-blue-300' 
+                            ? 'bg-blue-50 text-blue-800 border-blue-200' 
                             : 'bg-slate-100 text-slate-700 border-slate-200'
                         }`}>
                           {progressVal === 100 
@@ -591,7 +599,7 @@ export function Closeout({ projectId }: { projectId: string }) {
                     </tr>
                   );
                 }) : (
-                  <tr><td colSpan={2} className="p-4 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูลงานในแผนการดำเนินงาน' : 'No tasks available in schedule plan'}</td></tr>
+                  <tr><td colSpan={2} className="p-3 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูลงานในแผนการดำเนินงาน' : 'No tasks available in schedule plan'}</td></tr>
                 )}
               </tbody>
             </table>
@@ -599,60 +607,60 @@ export function Closeout({ projectId }: { projectId: string }) {
         </div>
 
         {/* Sections: Problems, Summary & Notes */}
-        <div className="mb-8 grid grid-cols-1 gap-5 break-inside-avoid">
+        <div className="mb-6 grid grid-cols-1 gap-4 break-inside-avoid">
           {showProblemsInExport && (
-            <div className="border-l-4 border-amber-500 bg-amber-50/40 rounded-r-xl border-t border-b border-r border-amber-200 p-4 shadow-sm">
-              <h2 className="text-sm font-bold text-amber-900 mb-1.5 flex items-center gap-2">
-                <span>{lang === 'th' ? 'ปัญหาและอุปสรรค' : 'Problems & Obstacles'}</span>
+            <div className="border-l-4 border-slate-500 bg-slate-50 rounded-r-lg border-t border-b border-r border-slate-200 p-3.5">
+              <h2 className="text-xs font-bold text-slate-800 mb-1">
+                {lang === 'th' ? 'ปัญหาและอุปสรรค' : 'Problems & Obstacles'}
               </h2>
-              <p className="text-sm whitespace-pre-wrap text-slate-800 leading-relaxed">{problems || '-'}</p>
+              <p className="text-xs whitespace-pre-wrap text-slate-700 leading-relaxed">{problems || '-'}</p>
             </div>
           )}
-          <div className="border-l-4 border-emerald-500 bg-emerald-50/40 rounded-r-xl border-t border-b border-r border-emerald-200 p-4 shadow-sm">
-            <h2 className="text-sm font-bold text-emerald-900 mb-1.5 flex items-center gap-2">
-              <span>{lang === 'th' ? 'สรุปผลการดำเนินงาน' : 'Operations Summary'}</span>
+          <div className="border-l-4 border-slate-700 bg-slate-50 rounded-r-lg border-t border-b border-r border-slate-200 p-3.5">
+            <h2 className="text-xs font-bold text-slate-800 mb-1">
+              {lang === 'th' ? 'สรุปผลการดำเนินงาน' : 'Operations Summary'}
             </h2>
-            <p className="text-sm whitespace-pre-wrap text-slate-800 leading-relaxed">{solutions || '-'}</p>
+            <p className="text-xs whitespace-pre-wrap text-slate-700 leading-relaxed">{solutions || '-'}</p>
           </div>
-          <div className="border-l-4 border-blue-500 bg-blue-50/40 rounded-r-xl border-t border-b border-r border-blue-200 p-4 shadow-sm">
-            <h2 className="text-sm font-bold text-blue-950 mb-1.5 flex items-center gap-2">
-              <span>{lang === 'th' ? 'หมายเหตุ' : 'Notes'}</span>
+          <div className="border-l-4 border-slate-400 bg-slate-50 rounded-r-lg border-t border-b border-r border-slate-200 p-3.5">
+            <h2 className="text-xs font-bold text-slate-800 mb-1">
+              {lang === 'th' ? 'หมายเหตุ' : 'Notes'}
             </h2>
-            <p className="text-sm whitespace-pre-wrap text-slate-800 leading-relaxed">{remarks || '-'}</p>
+            <p className="text-xs whitespace-pre-wrap text-slate-700 leading-relaxed">{remarks || '-'}</p>
           </div>
         </div>
         
         {/* PDF Dual Signatures */}
         {showSignaturesInExport && (
-          <div className="mb-8 break-inside-avoid mt-10 pt-6 border-t-2 border-slate-200">
-            <h2 className="text-sm font-bold text-blue-950 mb-4">{lang === 'th' ? 'ลายมือชื่อยืนยัน' : 'Signatures'}</h2>
-            <div className="grid grid-cols-2 gap-12 text-center bg-slate-50/60 p-6 rounded-xl border border-slate-200">
+          <div className="mb-6 break-inside-avoid mt-8 pt-4 border-t border-slate-300">
+            <h2 className="text-xs font-bold text-slate-800 mb-3">{lang === 'th' ? 'ลายมือชื่อยืนยัน' : 'Signatures'}</h2>
+            <div className="grid grid-cols-2 gap-10 text-center bg-slate-50/50 p-5 rounded-lg border border-slate-200">
               {/* Customer Signature Box (Left) */}
               <div className="flex flex-col items-center">
-                <div className="h-24 w-full flex items-center justify-center border-b-2 border-slate-300 mb-2 bg-white rounded-t">
+                <div className="h-20 w-full flex items-center justify-center border-b border-slate-300 mb-2 bg-white rounded-t">
                   {clientSigUrl ? (
-                    <img src={clientSigUrl} alt="Customer Signature" className="h-20 object-contain mix-blend-multiply mx-auto" />
+                    <img src={clientSigUrl} alt="Customer Signature" className="h-16 object-contain mix-blend-multiply mx-auto" />
                   ) : (
                     <span className="text-xs text-slate-400 italic">{lang === 'th' ? '( ยังไม่ได้ลงนาม )' : '( Not Signed )'}</span>
                   )}
                 </div>
-                <p className="text-sm font-bold text-slate-900">{lang === 'th' ? 'ลงชื่อ......................................................' : 'Signature......................................................'}</p>
-                <p className="text-xs font-semibold text-blue-950 mt-1">{lang === 'th' ? '( ลายมือชื่อลูกค้า / ผู้ว่าจ้าง )' : '( Customer / Client Signature )'}</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">{lang === 'th' ? 'วันที่ ......... / ......... / .........' : 'Date ......... / ......... / .........'}</p>
+                <p className="text-xs font-bold text-slate-900">{lang === 'th' ? 'ลงชื่อ......................................................' : 'Signature......................................................'}</p>
+                <p className="text-[11px] font-semibold text-slate-700 mt-1">{lang === 'th' ? '( ลายมือชื่อลูกค้า / ผู้ว่าจ้าง )' : '( Customer / Client Signature )'}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">{lang === 'th' ? 'วันที่ ......... / ......... / .........' : 'Date ......... / ......... / .........'}</p>
               </div>
 
               {/* Officer Signature Box (Right) */}
               <div className="flex flex-col items-center">
-                <div className="h-24 w-full flex items-center justify-center border-b-2 border-slate-300 mb-2 bg-white rounded-t">
+                <div className="h-20 w-full flex items-center justify-center border-b border-slate-300 mb-2 bg-white rounded-t">
                   {officerSigUrl ? (
-                    <img src={officerSigUrl} alt="Officer Signature" className="h-20 object-contain mix-blend-multiply mx-auto" />
+                    <img src={officerSigUrl} alt="Officer Signature" className="h-16 object-contain mix-blend-multiply mx-auto" />
                   ) : (
                     <span className="text-xs text-slate-400 italic">{lang === 'th' ? '( ยังไม่ได้ลงนาม )' : '( Not Signed )'}</span>
                   )}
                 </div>
-                <p className="text-sm font-bold text-slate-900">{lang === 'th' ? 'ลงชื่อ......................................................' : 'Signature......................................................'}</p>
-                <p className="text-xs font-semibold text-blue-950 mt-1">{lang === 'th' ? '( ลายมือชื่อเจ้าหน้าที่ / ผู้รายงาน )' : '( Officer / Staff Signature )'}</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">{lang === 'th' ? 'วันที่ ......... / ......... / .........' : 'Date ......... / ......... / .........'}</p>
+                <p className="text-xs font-bold text-slate-900">{lang === 'th' ? 'ลงชื่อ......................................................' : 'Signature......................................................'}</p>
+                <p className="text-[11px] font-semibold text-slate-700 mt-1">{lang === 'th' ? '( ลายมือชื่อเจ้าหน้าที่ / ผู้รายงาน )' : '( Officer / Staff Signature )'}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">{lang === 'th' ? 'วันที่ ......... / ......... / .........' : 'Date ......... / ......... / .........'}</p>
               </div>
             </div>
           </div>
@@ -660,17 +668,17 @@ export function Closeout({ projectId }: { projectId: string }) {
 
         {/* Photos (Appendix) */}
         {photos.length > 0 && (
-          <div className="break-before-page pt-6">
-            <div className="bg-gradient-to-r from-slate-900 to-blue-950 text-white p-4 rounded-xl shadow-md border-l-6 border-blue-500 mb-6">
-              <h1 className="text-xl font-extrabold uppercase tracking-tight text-white">{lang === 'th' ? 'ภาคผนวก' : 'Appendix'}</h1>
-              <p className="text-blue-200 text-xs font-medium mt-0.5">{lang === 'th' ? 'รูปภาพประกอบการดำเนินงานโครงการ' : 'Attached Photos'}</p>
+          <div className="break-before-page pt-4">
+            <div className="bg-slate-800 text-white p-3.5 rounded-lg shadow-sm border-l-4 border-slate-600 mb-5">
+              <h1 className="text-lg font-bold uppercase tracking-tight text-white">{lang === 'th' ? 'ภาคผนวก' : 'Appendix'}</h1>
+              <p className="text-slate-300 text-[11px] font-medium mt-0.5">{lang === 'th' ? 'รูปภาพประกอบการดำเนินงานโครงการ' : 'Attached Photos'}</p>
             </div>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-5">
               {photos.map((p, i) => (
-                <div key={i} className="mb-4 break-inside-avoid">
-                  <div className="border border-blue-200 rounded-xl overflow-hidden bg-white p-3 shadow-sm">
-                    <img src={p.url} alt={`รูป ${i+1}`} className="w-full h-60 object-cover border border-slate-200 mb-2.5 rounded-lg" />
-                    <p className="text-xs text-center text-blue-950 font-bold px-2 py-0.5 bg-blue-50 rounded">{p.caption || (lang === 'th' ? `รูปที่ ${i+1}` : `Photo ${i+1}`)}</p>
+                <div key={i} className="mb-3 break-inside-avoid">
+                  <div className="border border-slate-300 rounded-lg overflow-hidden bg-white p-2.5">
+                    <img src={p.url} alt={`รูป ${i+1}`} className="w-full h-56 object-cover border border-slate-200 mb-2 rounded" />
+                    <p className="text-xs text-center text-slate-800 font-semibold px-2 py-0.5 bg-slate-100 rounded">{p.caption || (lang === 'th' ? `รูปที่ ${i+1}` : `Photo ${i+1}`)}</p>
                   </div>
                 </div>
               ))}
