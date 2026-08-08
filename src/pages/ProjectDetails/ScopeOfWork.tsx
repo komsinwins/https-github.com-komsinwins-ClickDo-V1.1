@@ -22,13 +22,9 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
   const [taskType, setTaskType] = useState<'main' | 'sub'>('main');
   const [selectedParentId, setSelectedParentId] = useState<string>('');
 
-  const updateScopesAndSchedule = (newScopes: ScopeType[]) => {
-    const projectNewScopes = newScopes.filter(s => s.projectId === projectId);
-    const otherScheduleTasks = (data.scheduleTasks || []).filter(s => s.projectId !== projectId);
-
+  const updateScopes = (newScopes: ScopeType[]) => {
     updateData({
       scopes: newScopes,
-      scheduleTasks: [...otherScheduleTasks, ...projectNewScopes]
     });
   };
 
@@ -46,7 +42,7 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
         durationDays: 1,
         progress: 0,
       };
-      updateScopesAndSchedule([...data.scopes, subScope]);
+      updateScopes([...data.scopes, subScope]);
       setNewTask('');
     } else {
       const newScope: ScopeType = {
@@ -57,7 +53,7 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
         durationDays: 1,
         progress: 0,
       };
-      updateScopesAndSchedule([...data.scopes, newScope]);
+      updateScopes([...data.scopes, newScope]);
       setNewTask('');
     }
   };
@@ -72,7 +68,7 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
       durationDays: 1,
       progress: 0,
     };
-    updateScopesAndSchedule([...data.scopes, newScope]);
+    updateScopes([...data.scopes, newScope]);
     setNewTask('');
   };
 
@@ -88,7 +84,7 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
       durationDays: 1,
       progress: 0,
     };
-    updateScopesAndSchedule([...data.scopes, subScope]);
+    updateScopes([...data.scopes, subScope]);
     setSubTaskInputs({ ...subTaskInputs, [parentId]: '' });
     setShowSubInput({ ...showSubInput, [parentId]: false });
   };
@@ -97,14 +93,14 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
     const updated = data.scopes.map(s => 
       s.id === id ? { ...s, [field]: value } : s
     );
-    updateScopesAndSchedule(updated);
+    updateScopes(updated);
   };
 
   const handleDelete = (id: string) => {
     if (!window.confirm(lang === 'th' ? 'คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?' : 'Are you sure you want to delete this item?')) return;
     // also delete sub-tasks if main task deleted
     const updated = data.scopes.filter(s => s.id !== id && s.parentId !== id);
-    updateScopesAndSchedule(updated);
+    updateScopes(updated);
   };
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
@@ -135,7 +131,7 @@ export function ScopeOfWork({ projectId }: { projectId: string }) {
       return s;
     });
     
-    updateScopesAndSchedule(updatedScopes);
+    updateScopes(updatedScopes);
     setDraggedId(null);
   };
 
