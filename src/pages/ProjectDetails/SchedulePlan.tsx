@@ -54,7 +54,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     const otherProjectsScheduleTasks = (data.scheduleTasks || []).filter(s => s.projectId !== projectId);
     const normalized = updatedProjectScheduleTasks.map((s, idx) => ({
       ...s,
-      order: s.order !== undefined ? s.order : idx,
+      order: idx,
     }));
     updateData({
       scheduleTasks: [...otherProjectsScheduleTasks, ...normalized]

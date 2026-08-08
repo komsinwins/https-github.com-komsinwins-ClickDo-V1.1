@@ -61,8 +61,9 @@ export const getAppData = (): AppState => {
 
 export const saveAppData = (data: AppState) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  // Save to Firebase
-  setDoc(doc(db, 'appData', 'main'), data).catch(console.error);
+  // Save to Firebase (sanitize undefined values which Firestore setDoc rejects)
+  const firestoreData = JSON.parse(JSON.stringify(data));
+  setDoc(doc(db, 'appData', 'main'), firestoreData).catch(console.error);
 };
 
 interface StoreState {
@@ -99,7 +100,8 @@ onSnapshot(doc(db, 'appData', 'main'), (docSnap) => {
   } else {
     // If no document exists in Firebase yet, push local state up
     const localData = getAppData();
-    setDoc(doc(db, 'appData', 'main'), localData).catch(console.error);
+    const firestoreData = JSON.parse(JSON.stringify(localData));
+    setDoc(doc(db, 'appData', 'main'), firestoreData).catch(console.error);
     useAppStore.setState({ isFirebaseLoaded: true, syncError: null });
   }
 }, (error) => {
