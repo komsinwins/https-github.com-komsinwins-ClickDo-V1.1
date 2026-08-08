@@ -196,16 +196,14 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     }
   });
 
-  // Bounds for Gantt view
+  // Bounds for Gantt view and Schedule timeline derived from project start and end dates
   let minDate = projectStartDate;
-  let maxDate = projectStartDate;
+  let maxDate = projectEndDate;
 
   const calculatedEndDates = Object.values(itemCalculatedDates).map(d => d.end);
-  if (calculatedEndDates.length > 0) {
-    maxDate = max([projectStartDate, ...calculatedEndDates]);
-  }
+  const calculatedStartDates = Object.values(itemCalculatedDates).map(d => d.start);
 
-  const validDates: Date[] = [minDate, maxDate];
+  const validDates: Date[] = [projectStartDate, projectEndDate, ...calculatedStartDates, ...calculatedEndDates];
   projectScopes.forEach(s => {
     if (s.baselineStartDate && isValid(parseISO(s.baselineStartDate))) validDates.push(parseISO(s.baselineStartDate));
     if (s.baselineEndDate && isValid(parseISO(s.baselineEndDate))) validDates.push(parseISO(s.baselineEndDate));
@@ -216,9 +214,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   minDate = min(validDates);
   maxDate = max(validDates);
 
-  minDate = addDays(minDate, -2);
-  maxDate = addDays(maxDate, 2);
-  const totalDays = Math.max(1, differenceInDays(maxDate, minDate));
+  const totalDays = Math.max(projectContractDuration, differenceInDays(maxDate, minDate) + 1);
 
   // Helper to calculate task progress % based on dates vs current date
   const calculateProgressFromDates = (scope: ScopeType): number => {
@@ -799,7 +795,8 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     position: 'above' | 'below',
     isSub: boolean,
     parentId?: string,
-    labelPrefix?: string
+    labelPrefix?: string,
+    isGantt = false
   ) => {
     if (
       !insertState ||
@@ -810,88 +807,100 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       return null;
     }
 
+    const content = (
+      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full">
+        <span className="text-xs font-bold text-amber-900 whitespace-nowrap flex items-center gap-1 bg-amber-200/80 px-2 py-0.5 rounded border border-amber-300">
+          <Plus className="w-3.5 h-3.5 text-amber-700" />
+          {isSub
+            ? (lang === 'th' ? `แทรกงานย่อย (${position === 'above' ? 'ด้านบน' : 'ด้านล่าง'})` : `Insert Sub-Task (${position})`)
+            : (lang === 'th' ? `แทรกงานหลัก (${position === 'above' ? 'ด้านบน' : 'ด้านล่าง'})` : `Insert Main Task (${position})`)}
+          {labelPrefix ? `: ${labelPrefix}` : ''}
+        </span>
+        <input
+          type="text"
+          value={insertTaskName}
+          onChange={(e) => setInsertTaskName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleConfirmInsert();
+            if (e.key === 'Escape') {
+              setInsertState(null);
+              setInsertTaskName('');
+              setInsertDurationDays(1);
+            }
+          }}
+          placeholder={
+            isSub
+              ? (lang === 'th' ? 'กรอกชื่อหัวข้องานย่อยที่ต้องการแทรกแล้วกด Enter...' : 'Enter sub-task name & press Enter...')
+              : (lang === 'th' ? 'กรอกชื่อหัวข้องานหลักที่ต้องการแทรกแล้วกด Enter...' : 'Enter main task name & press Enter...')
+          }
+          className="flex-1 min-w-[180px] px-3 py-1 text-xs border border-amber-400 rounded bg-white font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          autoFocus
+        />
+        {masterProjectScopes.length > 0 && (
+          <select
+            onChange={(e) => {
+              if (e.target.value) {
+                setInsertTaskName(e.target.value);
+              }
+            }}
+            className="px-2 py-1 text-xs border border-amber-300 rounded bg-amber-100/60 text-amber-900 font-medium outline-none focus:ring-1 focus:ring-amber-500 max-w-[170px] truncate"
+            defaultValue=""
+          >
+            <option value="" disabled>{lang === 'th' ? '-- เลือกจากขอบเขตงาน --' : '-- Select from scope --'}</option>
+            {masterProjectScopes.map(s => (
+              <option key={s.id} value={s.taskName}>{s.taskName}</option>
+            ))}
+          </select>
+        )}
+        <div className="flex items-center gap-1 shrink-0 bg-white px-2 py-0.5 border border-amber-300 rounded">
+          <span className="text-[11px] font-bold text-slate-700 whitespace-nowrap">{lang === 'th' ? 'ระยะเวลา:' : 'Duration:'}</span>
+          <input
+            type="number"
+            min="1"
+            value={insertDurationDays}
+            onChange={(e) => setInsertDurationDays(Math.max(1, parseInt(e.target.value) || 1))}
+            className="w-12 px-1 py-0.5 text-xs border border-slate-300 rounded bg-white font-bold text-center text-slate-800"
+          />
+          <span className="text-[10px] text-slate-500 font-medium">{lang === 'th' ? 'วัน' : 'days'}</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleConfirmInsert}
+          disabled={!insertTaskName.trim()}
+          className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-50 flex items-center gap-1 shrink-0 shadow-xs cursor-pointer"
+        >
+          <Check className="w-3.5 h-3.5" />
+          <span>{lang === 'th' ? 'แทรกงานนี้' : 'Confirm'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setInsertState(null);
+            setInsertTaskName('');
+            setInsertDurationDays(1);
+          }}
+          className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-200/80 hover:bg-slate-300 rounded shrink-0 cursor-pointer"
+        >
+          {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+        </button>
+      </div>
+    );
+
+    if (isGantt) {
+      return (
+        <div key={`insert-${targetId}-${position}`} className="bg-amber-50/95 border-2 border-amber-400 p-2 rounded-lg my-1 shadow-sm">
+          {content}
+        </div>
+      );
+    }
+
     return (
       <tr key={`insert-${targetId}-${position}`} className="bg-amber-50/95 border-2 border-amber-400">
         <td className="p-2 text-center text-xs font-bold text-amber-700">
           📍
         </td>
         <td className="p-2" colSpan={8}>
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            <span className="text-xs font-bold text-amber-900 whitespace-nowrap flex items-center gap-1 bg-amber-200/80 px-2 py-0.5 rounded border border-amber-300">
-              <Plus className="w-3.5 h-3.5 text-amber-700" />
-              {isSub
-                ? (lang === 'th' ? `แทรกงานย่อย (${position === 'above' ? 'ด้านบน' : 'ด้านล่าง'})` : `Insert Sub-Task (${position})`)
-                : (lang === 'th' ? `แทรกงานหลัก (${position === 'above' ? 'ด้านบน' : 'ด้านล่าง'})` : `Insert Main Task (${position})`)}
-              {labelPrefix ? `: ${labelPrefix}` : ''}
-            </span>
-            <input
-              type="text"
-              value={insertTaskName}
-              onChange={(e) => setInsertTaskName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleConfirmInsert();
-                if (e.key === 'Escape') {
-                  setInsertState(null);
-                  setInsertTaskName('');
-                  setInsertDurationDays(1);
-                }
-              }}
-              placeholder={
-                isSub
-                  ? (lang === 'th' ? 'กรอกชื่อหัวข้องานย่อยที่ต้องการแทรกแล้วกด Enter...' : 'Enter sub-task name & press Enter...')
-                  : (lang === 'th' ? 'กรอกชื่อหัวข้องานหลักที่ต้องการแทรกแล้วกด Enter...' : 'Enter main task name & press Enter...')
-              }
-              className="flex-1 min-w-[180px] px-3 py-1 text-xs border border-amber-400 rounded bg-white font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              autoFocus
-            />
-            {masterProjectScopes.length > 0 && (
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    setInsertTaskName(e.target.value);
-                  }
-                }}
-                className="px-2 py-1 text-xs border border-amber-300 rounded bg-amber-100/60 text-amber-900 font-medium outline-none focus:ring-1 focus:ring-amber-500 max-w-[170px] truncate"
-                defaultValue=""
-              >
-                <option value="" disabled>{lang === 'th' ? '-- หรือเลือกจากขอบเขตงาน --' : '-- Or select scope --'}</option>
-                {masterProjectScopes.map(s => (
-                  <option key={s.id} value={s.taskName}>{s.taskName}</option>
-                ))}
-              </select>
-            )}
-            <div className="flex items-center gap-1 shrink-0 bg-white px-2 py-0.5 border border-amber-300 rounded">
-              <span className="text-[11px] font-bold text-slate-700 whitespace-nowrap">{lang === 'th' ? 'ระยะเวลา:' : 'Duration:'}</span>
-              <input
-                type="number"
-                min="1"
-                value={insertDurationDays}
-                onChange={(e) => setInsertDurationDays(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-12 px-1 py-0.5 text-xs border border-slate-300 rounded bg-white font-bold text-center text-slate-800"
-              />
-              <span className="text-[10px] text-slate-500 font-medium">{lang === 'th' ? 'วัน' : 'days'}</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleConfirmInsert}
-              disabled={!insertTaskName.trim()}
-              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-50 flex items-center gap-1 shrink-0 shadow-xs cursor-pointer"
-            >
-              <Check className="w-3.5 h-3.5" />
-              <span>{lang === 'th' ? 'แทรกงานนี้' : 'Confirm'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setInsertState(null);
-                setInsertTaskName('');
-                setInsertDurationDays(1);
-              }}
-              className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-200/80 hover:bg-slate-300 rounded shrink-0 cursor-pointer"
-            >
-              {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
-            </button>
-          </div>
+          {content}
         </td>
         <td className="p-2"></td>
       </tr>
@@ -1198,9 +1207,30 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
 
       <div className="overflow-x-auto border border-slate-200 rounded-lg bg-white p-4 shadow-sm" ref={reportRef}>
         <div className="mb-4 pb-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="text-center md:text-left">
+          <div className="text-center md:text-left space-y-1">
             <h3 className="text-xl font-bold text-slate-800">{lang === 'th' ? 'แผนการดำเนินงาน (Execution & Operational Plan)' : 'Execution & Operational Plan'}</h3>
-            <p className="text-xs text-slate-500 mt-1">{project.name} | {lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start Date:'} {format(projectStartDate, 'dd/MM/yyyy')}</p>
+            <div className="flex items-center gap-2 flex-wrap text-xs text-slate-600 font-medium">
+              <span className="font-bold text-slate-900">{project.name}</span>
+              <span className="text-slate-300">|</span>
+              <div className="flex items-center gap-1.5 bg-blue-50/80 px-2.5 py-1 rounded-md border border-blue-200 text-blue-900 font-semibold">
+                <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                <span>{format(projectStartDate, 'dd/MM/yyyy')}</span>
+                <ArrowRight className="w-3 h-3 text-blue-400" />
+                <span>{format(projectEndDate, 'dd/MM/yyyy')}</span>
+                <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.2 rounded font-bold ml-1">
+                  {lang === 'th' ? `รวม ${projectContractDuration} วัน` : `${projectContractDuration} days`}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenProjectEditModal}
+                className="text-[11px] text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 font-bold cursor-pointer ml-1"
+                title={lang === 'th' ? 'แก้ไขวันที่เริ่ม - สิ้นสุดโครงการ' : 'Edit Project Start/End Dates'}
+              >
+                <Edit3 className="w-3 h-3" />
+                <span>{lang === 'th' ? 'แก้ไขวันที่โครงการ' : 'Edit Project Dates'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Overall Project Progress Banner & Auto Calculate */}
@@ -1849,13 +1879,13 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                 <Plus className="w-4 h-4 text-[#0061FF]" />
                 <span>{lang === 'th' ? 'เพิ่มขอบเขตงานหลัก:' : 'Add Main Scope:'}</span>
               </div>
-              <div className="flex items-center gap-2 flex-1 max-w-xl">
+              <div className="flex items-center gap-2 flex-1 max-w-2xl flex-wrap sm:flex-nowrap">
                 <input
                   type="text"
                   value={ganttNewTaskName}
                   onChange={(e) => setGanttNewTaskName(e.target.value)}
                   placeholder={lang === 'th' ? 'พิมพ์ชื่อขอบเขตงานหลักที่ต้องการเพิ่ม...' : 'Enter main scope name...'}
-                  className="flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
+                  className="flex-1 min-w-[180px] px-3 py-1.5 text-xs border border-slate-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
                   onKeyDown={(e) => e.key === 'Enter' && handleAddGanttMainTask()}
                 />
                 <div className="flex items-center gap-1">
@@ -1871,10 +1901,18 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                 </div>
                 <button
                   onClick={handleAddGanttMainTask}
-                  className="px-3.5 py-1.5 bg-[#0061FF] text-white rounded text-xs font-bold hover:bg-blue-700 flex items-center gap-1 shadow-xs shrink-0"
+                  className="px-3.5 py-1.5 bg-[#0061FF] text-white rounded text-xs font-bold hover:bg-blue-700 flex items-center gap-1 shadow-xs shrink-0 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>{lang === 'th' ? 'เพิ่มงานหลัก' : 'Add Main Task'}</span>
+                </button>
+                <button
+                  onClick={() => setShowScopePickerModal(true)}
+                  className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded text-xs font-bold flex items-center gap-1 shadow-xs shrink-0 cursor-pointer border border-emerald-500/30"
+                  title={lang === 'th' ? 'เลือกข้อมูลจากขอบเขตงานหรือรายการ BOQ เข้ามาเป็น Task' : 'Import Scope of Work as Tasks'}
+                >
+                  <ListPlus className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>{lang === 'th' ? 'เลือกข้อมูลจากขอบเขตงาน' : 'Select from Scope'}</span>
                 </button>
               </div>
             </div>
@@ -1882,16 +1920,17 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
             {mainScopes.length === 0 ? (
               <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 rounded-lg">
                 <p className="text-slate-500 text-sm font-medium">{lang === 'th' ? 'ยังไม่มีขอบเขตงานในตาราง' : 'No tasks available.'}</p>
-                <p className="text-xs text-slate-400 mt-1">{lang === 'th' ? 'ใช้กล่องด้านบนเพื่อเพิ่มขอบเขตงานหลักแรกของคุณ' : 'Use the form above to add your first task.'}</p>
+                <p className="text-xs text-slate-400 mt-1">{lang === 'th' ? 'ใช้กล่องด้านบนเพื่อเลือกขอบเขตงาน หรือพิมพ์เพิ่มขอบเขตงานหลักแรกของคุณ' : 'Use the form above to pick scope or add your first task.'}</p>
               </div>
             ) : (
               <div className="relative pt-2">
-                {/* Timeline Header (Days Numbers Header - No Calendar Dates) */}
-                <div className="flex border-b-2 border-slate-300 pb-2 mb-4 text-[10px] text-slate-700 relative pl-[240px] bg-slate-100/60 p-2 rounded-t-lg">
-                  <div className="absolute left-3 bottom-2 w-[230px] font-bold text-slate-800 text-xs">
-                    {lang === 'th' ? 'รายการขอบเขตงาน / งานย่อย' : 'Task Scope'}
+                {/* Timeline Header (Calendar Dates + Day Numbers Header) */}
+                <div className="flex border-b-2 border-slate-300 pb-2 mb-4 text-[10px] text-slate-700 relative pl-[280px] bg-slate-100/60 p-2 rounded-t-lg">
+                  <div className="absolute left-3 bottom-2 w-[270px] font-bold text-slate-800 text-xs flex items-center justify-between pr-2">
+                    <span>{lang === 'th' ? 'รายการขอบเขตงาน / วันที่ตามแผน' : 'Task Scope & Planned Dates'}</span>
+                    <span className="text-[10px] text-slate-500 font-normal">{lang === 'th' ? '(เริ่ม - สิ้นสุด)' : '(Start - End)'}</span>
                   </div>
-                  <div className="flex-1 relative h-6 font-mono">
+                  <div className="flex-1 relative h-7 font-mono">
                     {Array.from({ length: totalDays }, (_, i) => i + 1)
                       .filter(dayNum => {
                         if (totalDays <= 25) return true;
@@ -1901,14 +1940,18 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                       })
                       .map((dayNum) => {
                         const percent = totalDays > 1 ? ((dayNum - 1) / (totalDays - 1)) * 100 : 0;
+                        const dayDate = addDays(minDate, dayNum - 1);
                         return (
                           <div
                             key={dayNum}
                             className="absolute flex flex-col items-center transform -translate-x-1/2"
                             style={{ left: `${percent}%` }}
                           >
-                            <span className="font-bold text-[10px] text-slate-800 whitespace-nowrap">
-                              {lang === 'th' ? `วันที่ ${dayNum}` : `Day ${dayNum}`}
+                            <span className="font-bold text-[10px] text-blue-900 whitespace-nowrap">
+                              {format(dayDate, 'dd/MM/yy')}
+                            </span>
+                            <span className="text-[9px] text-slate-500 whitespace-nowrap">
+                              {lang === 'th' ? `ว.${dayNum}` : `D${dayNum}`}
                             </span>
                             <div className="h-2 w-0.5 bg-slate-400 mt-0.5 rounded-full" />
                           </div>
@@ -1948,182 +1991,357 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                     }
 
                     return (
-                      <div key={main.id} className="space-y-2">
-                        {/* Parent Bar */}
-                        <div className="relative flex items-center bg-slate-50 p-1.5 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors">
-                          <div className="w-[230px] flex-shrink-0 text-xs text-slate-900 font-bold truncate pr-2 flex items-center justify-between">
-                            <div className="flex items-center truncate">
-                              <span className="w-5 text-slate-500 text-[11px] text-center flex-shrink-0">{mainIdx + 1}.</span>
-                              <span title={main.taskName} className="truncate">{main.taskName}</span>
-                            </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <button
-                                onClick={() => setShowSubInput({ ...showSubInput, [main.id]: !showSubInput[main.id] })}
-                                className="px-1.5 py-0.5 text-[10px] bg-blue-50 hover:bg-blue-100 text-[#0061FF] rounded font-semibold flex items-center gap-0.5"
-                                title={lang === 'th' ? 'เพิ่มขอบเขตงานย่อย' : 'Add Sub Task'}
-                              >
-                                <Plus className="w-3 h-3" />
-                                <span>{lang === 'th' ? 'ย่อย' : 'Sub'}</span>
-                              </button>
-                              <button
-                                onClick={() => handleDelete(main.id)}
-                                className="p-0.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
-                                title={lang === 'th' ? 'ลบงาน' : 'Delete task'}
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                          
-                          <div className="flex-1 h-7 relative bg-white rounded border border-slate-100 overflow-hidden">
-                            {/* Baseline Container Bar */}
-                            {mWidth > 0 && (
-                              <div 
-                                className="absolute top-1 h-5 rounded bg-blue-100 border border-blue-400/70 overflow-hidden flex items-center shadow-xs"
-                                style={{ left: `${mStart}%`, width: `${mWidth}%` }}
-                                title={`${lang === 'th' ? 'แผนงาน' : 'Baseline'} ${main.taskName}: ${lang === 'th' ? `วันที่ ${mStartDayNum} - ${mEndDayNum}` : `Day ${mStartDayNum} - ${mEndDayNum}`} (${mainDates.duration} ${lang === 'th' ? 'วัน' : 'days'})`}
-                              >
-                                {/* Inner Actual Progress Fill inside Baseline */}
-                                {mAWidth === 0 && mainProgress > 0 && (
-                                  <div 
-                                    className={`h-full transition-all ${mainProgress === 100 ? 'bg-emerald-500' : 'bg-[#0061FF]'}`}
-                                    style={{ width: `${mainProgress}%` }}
-                                  />
-                                )}
-                                <span className="absolute left-2 text-[10px] font-bold text-slate-800 whitespace-nowrap drop-shadow-xs z-10">
-                                  {lang === 'th' ? `วันที่ ${mStartDayNum}-${mEndDayNum}` : `Day ${mStartDayNum}-${mEndDayNum}`} ({mainDates.duration}d | {mainProgress}%)
-                                </span>
-                              </div>
-                            )}
+                      <React.Fragment key={main.id}>
+                        {/* Inline Insertion Row ABOVE Main Task in Gantt */}
+                        {renderInlineInsertRow(main.id, 'above', false, undefined, main.taskName, true)}
 
-                            {/* Actual Dates Bar Overlay if custom actual dates provided */}
-                            {mAWidth > 0 && (
-                              <div 
-                                className={`absolute top-1.5 h-4 rounded opacity-90 shadow-sm flex items-center px-1.5 ${mainProgress === 100 ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'}`}
-                                style={{ left: `${mAStart}%`, width: `${mAWidth}%` }}
-                                title={`${lang === 'th' ? 'ผลจริง' : 'Actual'} ${main.taskName}: ${mainProgress}%`}
-                              >
-                                <span className="text-[9px] font-bold truncate">
-                                  {lang === 'th' ? 'จริง' : 'Act'}: {mainProgress}%
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Sub Tasks Bars */}
-                        {subScopes.map((sub, subIdx) => {
-                          const subDates = itemCalculatedDates[sub.id] || { start: minDate, end: maxDate, duration: 1 };
-                          const sStartOffset = differenceInDays(subDates.start, minDate);
-                          const sStart = Math.max(0, (sStartOffset / totalDays) * 100);
-                          const sWidth = Math.min(100 - sStart, (subDates.duration / totalDays) * 100);
-
-                          const sStartDayNum = Math.max(1, differenceInDays(subDates.start, minDate) + 1);
-                          const sEndDayNum = Math.max(1, differenceInDays(subDates.end, minDate) + 1);
-
-                          let aStart = 0;
-                          let aWidth = 0;
-                          if (sub.actualStartDate && isValid(parseISO(sub.actualStartDate))) {
-                            const actualEnd = sub.actualEndDate && isValid(parseISO(sub.actualEndDate)) 
-                              ? parseISO(sub.actualEndDate) 
-                              : new Date();
-                              
-                            const actualStartOffset = differenceInDays(parseISO(sub.actualStartDate), minDate);
-                            const actualDur = differenceInDays(actualEnd, parseISO(sub.actualStartDate)) + 1;
-                            
-                            aStart = Math.max(0, (actualStartOffset / totalDays) * 100);
-                            aWidth = Math.min(100 - aStart, (actualDur / totalDays) * 100);
-                          }
-
-                          return (
-                            <div key={sub.id} className="relative flex items-center pl-4">
-                              <div className="w-[214px] flex-shrink-0 text-xs text-slate-600 font-medium truncate pr-2 flex items-center justify-between">
+                        <div className="space-y-2">
+                          {/* Parent Bar */}
+                          <div className="relative flex items-center bg-slate-50 p-1.5 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors">
+                            <div className="w-[270px] flex-shrink-0 text-xs text-slate-900 font-bold pr-2 flex items-center justify-between">
+                              <div className="flex flex-col truncate pr-1">
                                 <div className="flex items-center truncate">
-                                  <CornerDownRight className="w-3 h-3 text-slate-400 mr-1 flex-shrink-0" />
-                                  <span className="text-[10px] text-slate-400 mr-1">{mainIdx + 1}.{subIdx + 1}</span>
-                                  <span title={sub.taskName} className="truncate">{sub.taskName}</span>
+                                  <span className="w-5 text-slate-500 text-[11px] text-center flex-shrink-0">{mainIdx + 1}.</span>
+                                  <span title={main.taskName} className="truncate font-bold text-slate-900">{main.taskName}</span>
                                 </div>
+                                <div className="text-[10px] text-blue-700 font-medium pl-5 flex items-center gap-1">
+                                  <span>{format(mainDates.start, 'dd/MM/yyyy')} - {format(mainDates.end, 'dd/MM/yyyy')}</span>
+                                  <span className="text-slate-400">({mainDates.duration}d)</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {/* Reorder Up/Down */}
+                                <div className="flex items-center bg-white border border-slate-200 rounded p-0.5 shadow-2xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveMainTask(main.id, 'up')}
+                                    disabled={mainIdx === 0}
+                                    className="p-0.5 hover:bg-slate-100 text-slate-700 disabled:opacity-20 disabled:hover:bg-transparent rounded"
+                                    title={lang === 'th' ? 'เลื่อนขึ้น (สลับลำดับงานหลัก)' : 'Move Up'}
+                                  >
+                                    <ChevronUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveMainTask(main.id, 'down')}
+                                    disabled={mainIdx === mainScopes.length - 1}
+                                    className="p-0.5 hover:bg-slate-100 text-slate-700 disabled:opacity-20 disabled:hover:bg-transparent rounded"
+                                    title={lang === 'th' ? 'เลื่อนลง (สลับลำดับงานหลัก)' : 'Move Down'}
+                                  >
+                                    <ChevronDown className="w-3 h-3" />
+                                  </button>
+                                </div>
+
+                                {/* Insert Menu */}
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveInsertMenuId(activeInsertMenuId === main.id ? null : main.id)}
+                                    className="p-1 px-1.5 text-[10px] bg-amber-50 text-amber-800 hover:bg-amber-100 rounded font-bold flex items-center gap-0.5 border border-amber-300"
+                                    title={lang === 'th' ? 'แทรกงานหลัก หรือแทรกงานย่อย' : 'Insert Task Options'}
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    <span>{lang === 'th' ? 'แทรก' : 'Insert'}</span>
+                                  </button>
+
+                                  {activeInsertMenuId === main.id && (
+                                    <>
+                                      <div className="fixed inset-0 z-20" onClick={() => setActiveInsertMenuId(null)} />
+                                      <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-slate-200 z-30 p-1 space-y-0.5 text-left text-xs font-semibold">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setInsertState({ targetId: main.id, position: 'above', isSub: false });
+                                            setInsertTaskName('');
+                                            setActiveInsertMenuId(null);
+                                          }}
+                                          className="w-full text-left px-2.5 py-1.5 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded flex items-center gap-1.5"
+                                        >
+                                          <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
+                                          <span>{lang === 'th' ? 'แทรกงานหลักด้านบน' : 'Insert Main Task Above'}</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setInsertState({ targetId: main.id, position: 'below', isSub: false });
+                                            setInsertTaskName('');
+                                            setActiveInsertMenuId(null);
+                                          }}
+                                          className="w-full text-left px-2.5 py-1.5 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded flex items-center gap-1.5"
+                                        >
+                                          <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                                          <span>{lang === 'th' ? 'แทรกงานหลักด้านล่าง' : 'Insert Main Task Below'}</span>
+                                        </button>
+                                        <div className="border-t border-slate-100 my-0.5" />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setShowSubInput({ ...showSubInput, [main.id]: true });
+                                            setActiveInsertMenuId(null);
+                                          }}
+                                          className="w-full text-left px-2.5 py-1.5 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded flex items-center gap-1.5"
+                                        >
+                                          <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                                          <span>{lang === 'th' ? 'เพิ่มงานย่อยในหัวข้อนี้' : 'Add Sub-Task Under This'}</span>
+                                        </button>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+
                                 <button
-                                  onClick={() => handleDelete(sub.id)}
-                                  className="p-0.5 text-slate-300 hover:text-red-600 rounded"
-                                  title={lang === 'th' ? 'ลบงานย่อย' : 'Delete sub task'}
+                                  onClick={() => setShowSubInput({ ...showSubInput, [main.id]: !showSubInput[main.id] })}
+                                  className="px-1.5 py-0.5 text-[10px] bg-blue-50 hover:bg-blue-100 text-[#0061FF] rounded font-semibold flex items-center gap-0.5 border border-blue-200"
+                                  title={lang === 'th' ? 'เพิ่มขอบเขตงานย่อย' : 'Add Sub Task'}
                                 >
-                                  <Trash2 className="w-2.5 h-2.5" />
+                                  <Plus className="w-3 h-3" />
+                                  <span>{lang === 'th' ? 'ย่อย' : 'Sub'}</span>
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(main.id)}
+                                  className="p-0.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
+                                  title={lang === 'th' ? 'ลบงาน' : 'Delete task'}
+                                >
+                                  <Trash2 className="w-3 h-3" />
                                 </button>
                               </div>
-                              
-                              <div className="flex-1 h-7 relative bg-slate-50/50 rounded border border-slate-100 overflow-hidden">
-                                {/* Baseline Container Bar */}
-                                {sWidth > 0 && (
-                                  <div 
-                                    className="absolute top-1 h-5 rounded bg-blue-100/90 border border-blue-400/80 overflow-hidden flex items-center"
-                                    style={{ left: `${sStart}%`, width: `${sWidth}%` }}
-                                    title={`${lang === 'th' ? 'แผนงาน' : 'Baseline'} ${sub.taskName}: ${lang === 'th' ? `วันที่ ${sStartDayNum} - ${sEndDayNum}` : `Day ${sStartDayNum} - ${sEndDayNum}`} (${subDates.duration} ${lang === 'th' ? 'วัน' : 'days'})`}
-                                  >
-                                    {/* Inner Actual Progress Fill inside Baseline when no custom actual date bar */}
-                                    {aWidth === 0 && (sub.progress || 0) > 0 && (
-                                      <div 
-                                        className={`h-full transition-all ${sub.progress === 100 ? 'bg-emerald-500' : 'bg-orange-500'}`}
-                                        style={{ width: `${sub.progress}%` }}
-                                      />
-                                    )}
-                                    <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 whitespace-nowrap z-10">
-                                      {lang === 'th' ? `วันที่ ${sStartDayNum}-${sEndDayNum}` : `D${sStartDayNum}-${sEndDayNum}`} ({sub.progress}%)
-                                    </span>
-                                  </div>
-                                )}
-                                
-                                {/* Actual Dates Bar Overlay if custom actual dates provided */}
-                                {aWidth > 0 && (
-                                  <div 
-                                    className={`absolute top-1.5 h-4 rounded opacity-90 shadow-xs flex items-center px-1 ${sub.progress === 100 ? 'bg-emerald-500 text-white' : 'bg-orange-500 text-white'}`}
-                                    style={{ left: `${aStart}%`, width: `${aWidth}%` }}
-                                    title={`${lang === 'th' ? 'ผลจริง' : 'Actual'} ${sub.taskName}: ${sub.progress}%`}
-                                  >
-                                    <span className="text-[9px] font-bold truncate">
-                                      {sub.progress}%
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
                             </div>
-                          );
-                        })}
+                            
+                            <div className="flex-1 h-8 relative bg-white rounded border border-slate-100 overflow-hidden">
+                              {/* Baseline Container Bar */}
+                              {mWidth > 0 && (
+                                <div 
+                                  className="absolute top-1 h-6 rounded bg-blue-100 border border-blue-400/70 overflow-hidden flex items-center shadow-xs"
+                                  style={{ left: `${mStart}%`, width: `${mWidth}%` }}
+                                  title={`${lang === 'th' ? 'แผนงาน' : 'Baseline'} ${main.taskName}: ${format(mainDates.start, 'dd/MM/yyyy')} - ${format(mainDates.end, 'dd/MM/yyyy')} (${mainDates.duration} ${lang === 'th' ? 'วัน' : 'days'})`}
+                                >
+                                  {/* Inner Actual Progress Fill inside Baseline */}
+                                  {mAWidth === 0 && mainProgress > 0 && (
+                                    <div 
+                                      className={`h-full transition-all ${mainProgress === 100 ? 'bg-emerald-500' : 'bg-[#0061FF]'}`}
+                                      style={{ width: `${mainProgress}%` }}
+                                    />
+                                  )}
+                                  <span className="absolute left-2 text-[10px] font-bold text-slate-800 whitespace-nowrap drop-shadow-xs z-10">
+                                    {format(mainDates.start, 'dd/MM/yy')} - {format(mainDates.end, 'dd/MM/yy')} ({mainDates.duration}d | {mainProgress}%)
+                                  </span>
+                                </div>
+                              )}
 
-                        {/* Inline subtask input for Gantt view */}
-                        {showSubInput[main.id] && (
-                          <div className="flex items-center pl-4 py-1.5 bg-blue-50/80 rounded-lg border border-blue-200 my-1 text-xs shadow-2xs">
-                            <div className="w-[214px] flex-shrink-0 flex items-center gap-1 pr-2">
-                              <CornerDownRight className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                              <span className="text-[10px] text-blue-700 font-bold">{mainIdx + 1}.{subScopes.length + 1}</span>
-                            </div>
-                            <div className="flex-1 flex items-center gap-2">
-                              <input
-                                type="text"
-                                value={subTaskInputs[main.id] || ''}
-                                onChange={(e) => setSubTaskInputs({ ...subTaskInputs, [main.id]: e.target.value })}
-                                placeholder={lang === 'th' ? 'กรอกชื่อขอบเขตงานย่อย แล้วกด Enter...' : 'Enter sub-task name...'}
-                                className="flex-1 px-2.5 py-1 text-xs border border-blue-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
-                                onKeyDown={(e) => e.key === 'Enter' && handleAddSub(main.id)}
-                                autoFocus
-                              />
-                              <button
-                                onClick={() => handleAddSub(main.id)}
-                                className="px-3 py-1 bg-[#0061FF] text-white rounded text-xs font-semibold hover:bg-blue-700 flex-shrink-0 flex items-center gap-1"
-                              >
-                                <Plus className="w-3 h-3" />
-                                <span>{lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task'}</span>
-                              </button>
-                              <button
-                                onClick={() => setShowSubInput({ ...showSubInput, [main.id]: false })}
-                                className="px-2 py-1 text-xs text-slate-500 hover:text-slate-700 flex-shrink-0"
-                              >
-                                {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
-                              </button>
+                              {/* Actual Dates Bar Overlay if custom actual dates provided */}
+                              {mAWidth > 0 && (
+                                <div 
+                                  className={`absolute top-1.5 h-5 rounded opacity-90 shadow-sm flex items-center px-1.5 ${mainProgress === 100 ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'}`}
+                                  style={{ left: `${mAStart}%`, width: `${mAWidth}%` }}
+                                  title={`${lang === 'th' ? 'ผลจริง' : 'Actual'} ${main.taskName}: ${mainProgress}%`}
+                                >
+                                  <span className="text-[9px] font-bold truncate">
+                                    {lang === 'th' ? 'จริง' : 'Act'}: {mainProgress}%
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
-                        )}
-                      </div>
+
+                          {/* Sub Tasks Bars */}
+                          {subScopes.map((sub, subIdx) => {
+                            const subDates = itemCalculatedDates[sub.id] || { start: minDate, end: maxDate, duration: 1 };
+                            const sStartOffset = differenceInDays(subDates.start, minDate);
+                            const sStart = Math.max(0, (sStartOffset / totalDays) * 100);
+                            const sWidth = Math.min(100 - sStart, (subDates.duration / totalDays) * 100);
+
+                            const sStartDayNum = Math.max(1, differenceInDays(subDates.start, minDate) + 1);
+                            const sEndDayNum = Math.max(1, differenceInDays(subDates.end, minDate) + 1);
+
+                            let aStart = 0;
+                            let aWidth = 0;
+                            if (sub.actualStartDate && isValid(parseISO(sub.actualStartDate))) {
+                              const actualEnd = sub.actualEndDate && isValid(parseISO(sub.actualEndDate)) 
+                                ? parseISO(sub.actualEndDate) 
+                                : new Date();
+                                
+                              const actualStartOffset = differenceInDays(parseISO(sub.actualStartDate), minDate);
+                              const actualDur = differenceInDays(actualEnd, parseISO(sub.actualStartDate)) + 1;
+                              
+                              aStart = Math.max(0, (actualStartOffset / totalDays) * 100);
+                              aWidth = Math.min(100 - aStart, (actualDur / totalDays) * 100);
+                            }
+
+                            return (
+                              <React.Fragment key={sub.id}>
+                                {/* Inline Insertion Row ABOVE Sub Task */}
+                                {renderInlineInsertRow(sub.id, 'above', true, main.id, sub.taskName, true)}
+
+                                <div className="relative flex items-center pl-4">
+                                  <div className="w-[254px] flex-shrink-0 text-xs text-slate-600 font-medium pr-2 flex items-center justify-between">
+                                    <div className="flex flex-col truncate pr-1">
+                                      <div className="flex items-center truncate">
+                                        <CornerDownRight className="w-3 h-3 text-slate-400 mr-1 flex-shrink-0" />
+                                        <span className="text-[10px] text-slate-400 mr-1">{mainIdx + 1}.{subIdx + 1}</span>
+                                        <span title={sub.taskName} className="truncate">{sub.taskName}</span>
+                                      </div>
+                                      <div className="text-[9px] text-slate-500 pl-5">
+                                        {format(subDates.start, 'dd/MM/yyyy')} - {format(subDates.end, 'dd/MM/yyyy')} ({subDates.duration}d)
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      {/* Reorder Up/Down for Subtasks */}
+                                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded p-0.5 shadow-2xs">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleMoveSubTask(sub.id, main.id, 'up')}
+                                          disabled={subIdx === 0}
+                                          className="p-0.5 hover:bg-slate-200 text-slate-600 disabled:opacity-20 disabled:hover:bg-transparent rounded"
+                                          title={lang === 'th' ? 'เลื่อนขึ้น (สลับลำดับงานย่อย)' : 'Move Sub Task Up'}
+                                        >
+                                          <ChevronUp className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleMoveSubTask(sub.id, main.id, 'down')}
+                                          disabled={subIdx === subScopes.length - 1}
+                                          className="p-0.5 hover:bg-slate-200 text-slate-600 disabled:opacity-20 disabled:hover:bg-transparent rounded"
+                                          title={lang === 'th' ? 'เลื่อนลง (สลับลำดับงานย่อย)' : 'Move Sub Task Down'}
+                                        >
+                                          <ChevronDown className="w-3 h-3" />
+                                        </button>
+                                      </div>
+
+                                      {/* Insert Sub Task Menu */}
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => setActiveInsertMenuId(activeInsertMenuId === sub.id ? null : sub.id)}
+                                          className="p-0.5 px-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-medium flex items-center gap-0.5 border border-slate-300"
+                                          title={lang === 'th' ? 'แทรกงานย่อยด้านบนหรือด้านล่าง' : 'Insert Sub Task Above or Below'}
+                                        >
+                                          <Plus className="w-2.5 h-2.5" />
+                                          <span>{lang === 'th' ? 'แทรก' : 'Insert'}</span>
+                                        </button>
+
+                                        {activeInsertMenuId === sub.id && (
+                                          <>
+                                            <div className="fixed inset-0 z-20" onClick={() => setActiveInsertMenuId(null)} />
+                                            <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-xl border border-slate-200 z-30 p-1 space-y-0.5 text-left text-xs font-semibold">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setInsertState({ targetId: sub.id, position: 'above', isSub: true, parentId: main.id });
+                                                  setInsertTaskName('');
+                                                  setActiveInsertMenuId(null);
+                                                }}
+                                                className="w-full text-left px-2.5 py-1.5 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded flex items-center gap-1.5"
+                                              >
+                                                <ArrowUp className="w-3.5 h-3.5 text-blue-600" />
+                                                <span>{lang === 'th' ? 'แทรกงานย่อยด้านบน' : 'Insert Sub Task Above'}</span>
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setInsertState({ targetId: sub.id, position: 'below', isSub: true, parentId: main.id });
+                                                  setInsertTaskName('');
+                                                  setActiveInsertMenuId(null);
+                                                }}
+                                                className="w-full text-left px-2.5 py-1.5 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded flex items-center gap-1.5"
+                                              >
+                                                <ArrowDown className="w-3.5 h-3.5 text-blue-600" />
+                                                <span>{lang === 'th' ? 'แทรกงานย่อยด้านล่าง' : 'Insert Sub Task Below'}</span>
+                                              </button>
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+
+                                      <button
+                                        onClick={() => handleDelete(sub.id)}
+                                        className="p-0.5 text-slate-300 hover:text-red-600 rounded"
+                                        title={lang === 'th' ? 'ลบงานย่อย' : 'Delete sub task'}
+                                      >
+                                        <Trash2 className="w-2.5 h-2.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex-1 h-7 relative bg-slate-50/50 rounded border border-slate-100 overflow-hidden">
+                                    {/* Baseline Container Bar */}
+                                    {sWidth > 0 && (
+                                      <div 
+                                        className="absolute top-1 h-5 rounded bg-blue-100/90 border border-blue-400/80 overflow-hidden flex items-center"
+                                        style={{ left: `${sStart}%`, width: `${sWidth}%` }}
+                                        title={`${lang === 'th' ? 'แผนงาน' : 'Baseline'} ${sub.taskName}: ${format(subDates.start, 'dd/MM/yyyy')} - ${format(subDates.end, 'dd/MM/yyyy')} (${subDates.duration} ${lang === 'th' ? 'วัน' : 'days'})`}
+                                      >
+                                        {/* Inner Actual Progress Fill inside Baseline when no custom actual date bar */}
+                                        {aWidth === 0 && (sub.progress || 0) > 0 && (
+                                          <div 
+                                            className={`h-full transition-all ${sub.progress === 100 ? 'bg-emerald-500' : 'bg-orange-500'}`}
+                                            style={{ width: `${sub.progress}%` }}
+                                          />
+                                        )}
+                                        <span className="absolute left-1.5 text-[9px] font-bold text-slate-800 whitespace-nowrap z-10">
+                                          {format(subDates.start, 'dd/MM/yy')} - {format(subDates.end, 'dd/MM/yy')} ({sub.progress}%)
+                                        </span>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Actual Dates Bar Overlay if custom actual dates provided */}
+                                    {aWidth > 0 && (
+                                      <div 
+                                        className={`absolute top-1.5 h-4 rounded opacity-90 shadow-xs flex items-center px-1 ${sub.progress === 100 ? 'bg-emerald-500 text-white' : 'bg-orange-500 text-white'}`}
+                                        style={{ left: `${aStart}%`, width: `${aWidth}%` }}
+                                        title={`${lang === 'th' ? 'ผลจริง' : 'Actual'} ${sub.taskName}: ${sub.progress}%`}
+                                      >
+                                        <span className="text-[9px] font-bold truncate">
+                                          {sub.progress}%
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Inline Insertion Row BELOW Sub Task */}
+                                {renderInlineInsertRow(sub.id, 'below', true, main.id, sub.taskName, true)}
+                              </React.Fragment>
+                            );
+                          })}
+
+                          {/* Inline subtask input for Gantt view */}
+                          {showSubInput[main.id] && (
+                            <div className="flex items-center pl-4 py-1.5 bg-blue-50/80 rounded-lg border border-blue-200 my-1 text-xs shadow-2xs">
+                              <div className="w-[254px] flex-shrink-0 flex items-center gap-1 pr-2">
+                                <CornerDownRight className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                                <span className="text-[10px] text-blue-700 font-bold">{mainIdx + 1}.{subScopes.length + 1}</span>
+                              </div>
+                              <div className="flex-1 flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={subTaskInputs[main.id] || ''}
+                                  onChange={(e) => setSubTaskInputs({ ...subTaskInputs, [main.id]: e.target.value })}
+                                  placeholder={lang === 'th' ? 'กรอกชื่อขอบเขตงานย่อย แล้วกด Enter...' : 'Enter sub-task name...'}
+                                  className="flex-1 px-2.5 py-1 text-xs border border-blue-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-[#0061FF]"
+                                  onKeyDown={(e) => e.key === 'Enter' && handleAddSub(main.id)}
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => handleAddSub(main.id)}
+                                  className="px-3 py-1 bg-[#0061FF] text-white rounded text-xs font-semibold hover:bg-blue-700 flex-shrink-0 flex items-center gap-1"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  <span>{lang === 'th' ? 'เพิ่มงานย่อย' : 'Add Sub Task'}</span>
+                                </button>
+                                <button
+                                  onClick={() => setShowSubInput({ ...showSubInput, [main.id]: false })}
+                                  className="px-2 py-1 text-xs text-slate-500 hover:text-slate-700 flex-shrink-0"
+                                >
+                                  {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Inline Insertion Row BELOW Main Task */}
+                        {renderInlineInsertRow(main.id, 'below', false, undefined, main.taskName, true)}
+                      </React.Fragment>
                     );
                   })}
                 </div>
@@ -3021,10 +3239,10 @@ function SchedulePlanPDFReport({
           </div>
 
           <div className="border border-slate-300 rounded p-2 bg-slate-50/50">
-            {/* Timeline Header (Day Numbers) */}
+            {/* Timeline Header (Day Numbers & Calendar Dates) */}
             <div className="flex justify-between text-[9px] text-slate-700 font-mono font-bold border-b border-slate-300 pb-1 mb-1.5 pl-[150px]">
-              <span>{lang === 'th' ? 'วันที่ 1' : 'Day 1'}</span>
-              <span>{lang === 'th' ? `วันที่ ${totalDays} (รวม ${totalDays} วัน)` : `Day ${totalDays} (${totalDays} days)`}</span>
+              <span>{format(projectStartDate, 'dd/MM/yyyy')} ({lang === 'th' ? 'วันที่ 1' : 'Day 1'})</span>
+              <span>{format(maxDate, 'dd/MM/yyyy')} ({lang === 'th' ? `วันที่ ${totalDays} | รวม ${totalDays} วัน` : `Day ${totalDays} | ${totalDays} days`})</span>
             </div>
 
             {/* Task Timeline Bars */}
