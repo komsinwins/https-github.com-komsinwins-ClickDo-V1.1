@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../../store';
 import { v4 as uuidv4 } from 'uuid';
-import { Download, Image as ImageIcon, Trash2, Eraser } from 'lucide-react';
+import { Download, Image as ImageIcon, Trash2, Eraser, Printer } from 'lucide-react';
 import { Report } from '../../types';
 import { format, parseISO } from 'date-fns';
 import SignatureCanvas from 'react-signature-canvas';
@@ -11,7 +11,19 @@ export function Closeout({ projectId }: { projectId: string }) {
   const { data, updateData } = useAppStore();
   const lang = data.language || 'th';
   const project = data.projects.find(p => p.id === projectId);
-  const scopes = data.scopes.filter(s => s.projectId === projectId).sort((a, b) => (a.order || 0) - (b.order || 0));
+  const masterProjectScopes = (data.scopes || [])
+    .filter(s => s.projectId === projectId)
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  const scheduleProjectTasks = (data.scheduleTasks || [])
+    .filter(s => s.projectId === projectId)
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  const rawTasks = scheduleProjectTasks.length > 0
+    ? scheduleProjectTasks
+    : masterProjectScopes;
+
+  const projectTasks = [...rawTasks].sort((a, b) => (a.order || 0) - (b.order || 0));
   
   const ownerName = data.owners.find(o => o.id === project?.ownerId)?.name || '-';
   const managerName = data.projectManagers.find(m => m.id === project?.managerId)?.name || '-';
@@ -28,7 +40,11 @@ export function Closeout({ projectId }: { projectId: string }) {
   
   const [clientSigUrl, setClientSigUrl] = useState<string | undefined>(closeoutReport?.clientSignatureUrl || closeoutReport?.signatureUrl);
   const [officerSigUrl, setOfficerSigUrl] = useState<string | undefined>(closeoutReport?.officerSignatureUrl);
-  
+
+  // Display toggles for PDF report export
+  const [showProblemsInExport, setShowProblemsInExport] = useState(true);
+  const [showSignaturesInExport, setShowSignaturesInExport] = useState(true);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const clientSigPad = useRef<SignatureCanvas>(null);
   const officerSigPad = useRef<SignatureCanvas>(null);
@@ -121,6 +137,34 @@ export function Closeout({ projectId }: { projectId: string }) {
           </div>
         </div>
 
+        {/* PDF Export Display Options Banner */}
+        <div className="bg-blue-50/70 p-3.5 px-4 rounded-xl border border-blue-200 flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm shadow-sm">
+          <div className="flex items-center gap-2 text-blue-900 font-semibold">
+            <Printer className="w-4 h-4 text-blue-600" />
+            <span>{lang === 'th' ? 'ตัวเลือกการแสดงผลเมื่อพิมพ์ / ส่งออก PDF:' : 'PDF Export Display Options:'}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-5">
+            <label className="flex items-center gap-2 text-slate-700 cursor-pointer font-medium hover:text-blue-700 transition-colors">
+              <input 
+                type="checkbox" 
+                checked={showProblemsInExport} 
+                onChange={e => setShowProblemsInExport(e.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+              />
+              <span>{lang === 'th' ? 'แสดงส่วน "ปัญหาและอุปสรรค"' : 'Show "Problems & Obstacles"'}</span>
+            </label>
+            <label className="flex items-center gap-2 text-slate-700 cursor-pointer font-medium hover:text-blue-700 transition-colors">
+              <input 
+                type="checkbox" 
+                checked={showSignaturesInExport} 
+                onChange={e => setShowSignaturesInExport(e.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+              />
+              <span>{lang === 'th' ? 'แสดงส่วน "ลายมือชื่อยืนยัน"' : 'Show "Signatures"'}</span>
+            </label>
+          </div>
+        </div>
+
       <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
         <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-200">{lang === 'th' ? '1. รายละเอียดโครงการ' : '1. Project Details'}</h4>
         
@@ -176,39 +220,55 @@ export function Closeout({ projectId }: { projectId: string }) {
       </div>
 
       <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
-        <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-200">{lang === 'th' ? '5. ขอบเขตงานและขั้นตอนการทำงาน' : '5. Scope of Work & Schedule'}</h4>
+        <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b border-slate-200">
+          {lang === 'th' ? '5. ขอบเขตงานและขั้นตอนการทำงาน (อ้างอิงจากแผนการดำเนินงาน)' : '5. Scope of Work & Work Steps (From Operational Plan)'}
+        </h4>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm border-collapse bg-white border border-slate-200 rounded">
             <thead className="bg-[#F1F5F9] text-slate-600 border-b border-slate-200">
               <tr>
-                <th className="p-3 font-semibold">{lang === 'th' ? 'ชื่องาน' : 'Task'}</th>
-                <th className="p-3 font-semibold text-center">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
+                <th className="p-3 font-semibold">{lang === 'th' ? 'รายการขอบเขตงาน / ขั้นตอน' : 'Task / Work Step'}</th>
+                <th className="p-3 font-semibold text-center w-52">{lang === 'th' ? 'สถานะงาน' : 'Task Status'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {scopes.length === 0 ? (
+              {projectTasks.length === 0 ? (
                 <tr>
                   <td colSpan={2} className="p-6 text-center text-slate-500">
-                    {lang === 'th' ? 'ไม่มีข้อมูลงาน' : 'No tasks defined.'}
+                    {lang === 'th' ? 'ไม่มีข้อมูลงานในแผนการดำเนินงาน' : 'No tasks defined in operational plan.'}
                   </td>
                 </tr>
               ) : (
-                scopes.map(s => (
-                  <tr key={s.id} className="hover:bg-slate-50">
-                    <td className="p-3 text-slate-700">{s.taskName}</td>
-                    <td className="p-3 text-center">
-                      {s.progress === 100 ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
-                          {lang === 'th' ? 'เสร็จสิ้น' : 'Completed'}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
-                          {s.progress}%
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                projectTasks.map(t => {
+                  const isSubTask = !!t.parentId;
+                  const progressVal = t.progress ?? 0;
+                  return (
+                    <tr key={t.id} className={isSubTask ? "bg-slate-50/50 hover:bg-slate-100/50" : "hover:bg-slate-50 font-medium"}>
+                      <td className={`p-3 text-slate-700 ${isSubTask ? 'pl-8 text-xs text-slate-600' : ''}`}>
+                        {isSubTask && <span className="mr-1.5 text-slate-400">↳</span>}
+                        {t.taskName}
+                      </td>
+                      <td className="p-3 text-center">
+                        {progressVal === 100 ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                            {lang === 'th' ? 'เสร็จสิ้น (100%)' : 'Completed (100%)'}
+                          </span>
+                        ) : progressVal > 0 ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                            {lang === 'th' ? `กำลังดำเนินการ (${progressVal}%)` : `In Progress (${progressVal}%)`}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            {lang === 'th' ? 'ยังไม่เริ่ม (0%)' : 'Not Started (0%)'}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -217,7 +277,18 @@ export function Closeout({ projectId }: { projectId: string }) {
 
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-medium text-slate-700">{lang === 'th' ? '6. ปัญหาและอุปสรรค' : '6. Problems & Obstacles'}</label>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-sm font-medium text-slate-700">{lang === 'th' ? '6. ปัญหาและอุปสรรค' : '6. Problems & Obstacles'}</label>
+            <label className="flex items-center gap-2 text-xs text-slate-600 font-normal cursor-pointer select-none bg-slate-100 px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-200 transition-colors">
+              <input 
+                type="checkbox" 
+                checked={showProblemsInExport} 
+                onChange={e => setShowProblemsInExport(e.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+              />
+              <span>{lang === 'th' ? 'แสดงใน PDF / รายงาน' : 'Show in PDF / Report'}</span>
+            </label>
+          </div>
           <textarea rows={3} value={problems} onChange={e => setProblems(e.target.value)} className="w-full mt-1 p-3 border border-slate-300 rounded-lg resize-none" placeholder={lang === 'th' ? 'อธิบายปัญหาที่พบ...' : 'Describe any problems encountered...'}/>
         </div>
         <div>
@@ -262,7 +333,18 @@ export function Closeout({ projectId }: { projectId: string }) {
       
       {/* Signature Section - Dual Column (Left: Customer, Right: Officer) */}
       <div className="space-y-4 pt-6 border-t border-slate-200">
-        <h4 className="font-bold text-slate-800 text-base">{lang === 'th' ? '10. ลายมือชื่อยืนยัน' : '10. Signatures'}</h4>
+        <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+          <h4 className="font-bold text-slate-800 text-base">{lang === 'th' ? '10. ลายมือชื่อยืนยัน' : '10. Signatures'}</h4>
+          <label className="flex items-center gap-2 text-xs text-slate-600 font-normal cursor-pointer select-none bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-200 transition-colors">
+            <input 
+              type="checkbox" 
+              checked={showSignaturesInExport} 
+              onChange={e => setShowSignaturesInExport(e.target.checked)}
+              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+            />
+            <span className="font-medium text-slate-700">{lang === 'th' ? 'แสดงใน PDF / รายงาน' : 'Show in PDF / Report'}</span>
+          </label>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Column: Customer Signature */}
@@ -465,29 +547,48 @@ export function Closeout({ projectId }: { projectId: string }) {
            </div>
         </div>
 
-        {/* Section 5: Scopes */}
+        {/* Section 5: Scopes & Schedule */}
         <div className="mb-8 break-inside-avoid">
-           <h2 className="text-lg font-bold bg-slate-800 text-white p-2 px-4 mb-4 rounded-t">5. {lang === 'th' ? 'ขอบเขตงานและขั้นตอนการทำงาน' : 'Scope of Work & Schedule'}</h2>
+           <h2 className="text-lg font-bold bg-slate-800 text-white p-2 px-4 mb-4 rounded-t">
+             5. {lang === 'th' ? 'ขอบเขตงานและขั้นตอนการทำงาน (อ้างอิงสถานะจากแผนการดำเนินงาน)' : '5. Scope of Work & Work Steps (Status from Schedule Plan)'}
+           </h2>
            <div className="border-2 border-slate-800 rounded-b overflow-hidden -mt-4 bg-white">
              <table className="w-full text-sm text-left">
                <thead className="bg-slate-100 border-b-2 border-slate-800">
                  <tr>
-                   <th className="p-3 font-semibold text-slate-800">{lang === 'th' ? 'ชื่องาน' : 'Task'}</th>
-                   <th className="p-3 font-semibold text-slate-800 text-center w-40">{lang === 'th' ? 'สถานะ' : 'Status'}</th>
+                   <th className="p-3 font-semibold text-slate-800">{lang === 'th' ? 'รายการขอบเขตงาน / ขั้นตอน' : 'Task / Work Step'}</th>
+                   <th className="p-3 font-semibold text-slate-800 text-center w-52">{lang === 'th' ? 'สถานะงาน' : 'Status'}</th>
                  </tr>
                </thead>
                <tbody className="divide-y divide-slate-200">
-                 {scopes.length > 0 ? scopes.map(s => (
-                   <tr key={s.id}>
-                     <td className="p-3">{s.taskName}</td>
-                     <td className="p-3 text-center">
-                       <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${s.progress === 100 ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
-                         {s.progress === 100 ? (lang === 'th' ? 'เสร็จสิ้น 100%' : 'Completed 100%') : `${s.progress}%`}
-                       </span>
-                     </td>
-                   </tr>
-                 )) : (
-                   <tr><td colSpan={2} className="p-4 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูลงาน' : 'No tasks available'}</td></tr>
+                 {projectTasks.length > 0 ? projectTasks.map(t => {
+                   const isSubTask = !!t.parentId;
+                   const progressVal = t.progress ?? 0;
+                   return (
+                     <tr key={t.id}>
+                       <td className={`p-3 ${isSubTask ? 'pl-8 text-xs text-slate-700' : 'font-medium'}`}>
+                         {isSubTask && <span className="mr-1.5 text-slate-400">↳</span>}
+                         {t.taskName}
+                       </td>
+                       <td className="p-3 text-center">
+                         <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${
+                           progressVal === 100 
+                             ? 'bg-emerald-100 text-emerald-800' 
+                             : progressVal > 0 
+                             ? 'bg-blue-100 text-blue-800' 
+                             : 'bg-slate-100 text-slate-700'
+                         }`}>
+                           {progressVal === 100 
+                             ? (lang === 'th' ? 'เสร็จสิ้น 100%' : 'Completed 100%') 
+                             : progressVal > 0 
+                             ? (lang === 'th' ? `กำลังดำเนินการ ${progressVal}%` : `In Progress ${progressVal}%`) 
+                             : (lang === 'th' ? 'ยังไม่เริ่ม 0%' : 'Not Started 0%')}
+                         </span>
+                       </td>
+                     </tr>
+                   );
+                 }) : (
+                   <tr><td colSpan={2} className="p-4 text-center text-slate-500 italic">{lang === 'th' ? 'ไม่มีข้อมูลงานในแผนการดำเนินงาน' : 'No tasks available in schedule plan'}</td></tr>
                  )}
                </tbody>
              </table>
@@ -496,10 +597,12 @@ export function Closeout({ projectId }: { projectId: string }) {
 
         {/* Sections 6, 7, 8 */}
         <div className="mb-8 grid grid-cols-1 gap-6 break-inside-avoid">
-          <div className="border-2 border-slate-800 rounded-lg p-5 bg-white relative mt-3">
-            <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">6. {lang === 'th' ? 'ปัญหาและอุปสรรค' : 'Problems & Obstacles'}</h2>
-            <p className="text-sm whitespace-pre-wrap text-slate-700">{problems || '-'}</p>
-          </div>
+          {showProblemsInExport && (
+            <div className="border-2 border-slate-800 rounded-lg p-5 bg-white relative mt-3">
+              <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">6. {lang === 'th' ? 'ปัญหาและอุปสรรค' : 'Problems & Obstacles'}</h2>
+              <p className="text-sm whitespace-pre-wrap text-slate-700">{problems || '-'}</p>
+            </div>
+          )}
           <div className="border-2 border-slate-800 rounded-lg p-5 bg-white relative mt-3">
             <h2 className="text-sm font-bold bg-white text-slate-800 px-2 absolute -top-3 left-4">7. {lang === 'th' ? 'สรุปผลการดำเนินงาน' : 'Operations Summary'}</h2>
             <p className="text-sm whitespace-pre-wrap text-slate-700">{solutions || '-'}</p>
@@ -511,37 +614,39 @@ export function Closeout({ projectId }: { projectId: string }) {
         </div>
         
         {/* PDF Dual Signatures */}
-        <div className="mb-8 break-inside-avoid mt-12 pt-6 border-t-2 border-slate-800">
-          <div className="grid grid-cols-2 gap-12 text-center">
-            {/* Customer Signature Box (Left) */}
-            <div className="flex flex-col items-center">
-              <div className="h-24 w-full flex items-center justify-center border-b border-slate-400 mb-2">
-                {clientSigUrl ? (
-                  <img src={clientSigUrl} alt="Customer Signature" className="h-20 object-contain mix-blend-multiply mx-auto" />
-                ) : (
-                  <span className="text-xs text-slate-300 italic">{lang === 'th' ? '( ยังไม่ได้ลงนาม )' : '( Not Signed )'}</span>
-                )}
+        {showSignaturesInExport && (
+          <div className="mb-8 break-inside-avoid mt-12 pt-6 border-t-2 border-slate-800">
+            <div className="grid grid-cols-2 gap-12 text-center">
+              {/* Customer Signature Box (Left) */}
+              <div className="flex flex-col items-center">
+                <div className="h-24 w-full flex items-center justify-center border-b border-slate-400 mb-2">
+                  {clientSigUrl ? (
+                    <img src={clientSigUrl} alt="Customer Signature" className="h-20 object-contain mix-blend-multiply mx-auto" />
+                  ) : (
+                    <span className="text-xs text-slate-300 italic">{lang === 'th' ? '( ยังไม่ได้ลงนาม )' : '( Not Signed )'}</span>
+                  )}
+                </div>
+                <p className="text-sm font-bold text-slate-900">{lang === 'th' ? 'ลงชื่อ......................................................' : 'Signature......................................................'}</p>
+                <p className="text-xs font-semibold text-slate-700 mt-1">{lang === 'th' ? '( ลายมือชื่อลูกค้า / ผู้ว่าจ้าง )' : '( Customer / Client Signature )'}</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">{lang === 'th' ? 'วันที่ ......... / ......... / .........' : 'Date ......... / ......... / .........'}</p>
               </div>
-              <p className="text-sm font-bold text-slate-900">{lang === 'th' ? 'ลงชื่อ......................................................' : 'Signature......................................................'}</p>
-              <p className="text-xs font-semibold text-slate-700 mt-1">{lang === 'th' ? '( ลายมือชื่อลูกค้า / ผู้ว่าจ้าง )' : '( Customer / Client Signature )'}</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">{lang === 'th' ? 'วันที่ ......... / ......... / .........' : 'Date ......... / ......... / .........'}</p>
-            </div>
 
-            {/* Officer Signature Box (Right) */}
-            <div className="flex flex-col items-center">
-              <div className="h-24 w-full flex items-center justify-center border-b border-slate-400 mb-2">
-                {officerSigUrl ? (
-                  <img src={officerSigUrl} alt="Officer Signature" className="h-20 object-contain mix-blend-multiply mx-auto" />
-                ) : (
-                  <span className="text-xs text-slate-300 italic">{lang === 'th' ? '( ยังไม่ได้ลงนาม )' : '( Not Signed )'}</span>
-                )}
+              {/* Officer Signature Box (Right) */}
+              <div className="flex flex-col items-center">
+                <div className="h-24 w-full flex items-center justify-center border-b border-slate-400 mb-2">
+                  {officerSigUrl ? (
+                    <img src={officerSigUrl} alt="Officer Signature" className="h-20 object-contain mix-blend-multiply mx-auto" />
+                  ) : (
+                    <span className="text-xs text-slate-300 italic">{lang === 'th' ? '( ยังไม่ได้ลงนาม )' : '( Not Signed )'}</span>
+                  )}
+                </div>
+                <p className="text-sm font-bold text-slate-900">{lang === 'th' ? 'ลงชื่อ......................................................' : 'Signature......................................................'}</p>
+                <p className="text-xs font-semibold text-slate-700 mt-1">{lang === 'th' ? '( ลายมือชื่อเจ้าหน้าที่ / ผู้รายงาน )' : '( Officer / Staff Signature )'}</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">{lang === 'th' ? 'วันที่ ......... / ......... / .........' : 'Date ......... / ......... / .........'}</p>
               </div>
-              <p className="text-sm font-bold text-slate-900">{lang === 'th' ? 'ลงชื่อ......................................................' : 'Signature......................................................'}</p>
-              <p className="text-xs font-semibold text-slate-700 mt-1">{lang === 'th' ? '( ลายมือชื่อเจ้าหน้าที่ / ผู้รายงาน )' : '( Officer / Staff Signature )'}</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">{lang === 'th' ? 'วันที่ ......... / ......... / .........' : 'Date ......... / ......... / .........'}</p>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Section 8: Photos (Appendix) */}
         {photos.length > 0 && (
