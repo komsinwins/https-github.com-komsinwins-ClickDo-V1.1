@@ -175,8 +175,8 @@ export function Closeout({ projectId }: { projectId: string }) {
           <div><span className="font-medium text-slate-600">{lang === 'th' ? 'พื้นที่ติดตั้ง:' : 'Area:'}</span> <span className="text-slate-800">{project?.installationArea || '-'}</span></div>
           <div><span className="font-medium text-slate-600">{lang === 'th' ? 'ผู้จัดการโครงการ:' : 'Project Manager:'}</span> <span className="text-slate-800">{managerName}</span></div>
           <div><span className="font-medium text-slate-600">{lang === 'th' ? 'วันที่เริ่มโครงการ:' : 'Start Date:'}</span> <span className="text-slate-800">{formatDate(project?.startDate)}</span></div>
-          <div><span className="font-medium text-slate-600">{lang === 'th' ? 'วันที่สิ้นสุด (แผนงาน):' : 'Planned End Date:'}</span> <span className="text-slate-800">{formatDate(project?.endDate)}</span></div>
-          <div><span className="font-medium text-slate-600">{lang === 'th' ? 'วันที่สิ้นสุดการดำเนินงาน:' : 'Actual End Date:'}</span> <span className="text-slate-800">{formatDate(project?.actualCompletionDate)}</span></div>
+          <div><span className="font-medium text-slate-600">{lang === 'th' ? 'วันสิ้นสุดโครงการ:' : 'Project End Date:'}</span> <span className="text-slate-800">{formatDate(project?.endDate)}</span></div>
+          <div><span className="font-medium text-slate-600">{lang === 'th' ? 'วันที่เสร็จสิ้นการดำเนินงาน:' : 'Actual Completion Date:'}</span> <span className="text-slate-800">{formatDate(project?.actualCompletionDate)}</span></div>
         </div>
       </div>
 
@@ -482,11 +482,11 @@ export function Closeout({ projectId }: { projectId: string }) {
                   <td className="py-2 px-4 text-slate-900">{formatDate(project?.startDate)}</td>
                 </tr>
                 <tr className="hover:bg-slate-50">
-                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'วันที่สิ้นสุด (แผนงาน):' : 'Planned End:'}</td>
+                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'วันสิ้นสุดโครงการ:' : 'Project End Date:'}</td>
                   <td className="py-2 px-4 text-slate-900">{formatDate(project?.endDate)}</td>
                 </tr>
                 <tr className="hover:bg-slate-50">
-                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'วันที่สิ้นสุด (จริง):' : 'Actual End:'}</td>
+                  <td className="py-2 px-4 font-semibold text-slate-700 w-1/3 bg-slate-50/80">{lang === 'th' ? 'วันที่เสร็จสิ้นการดำเนินงาน:' : 'Actual Completion Date:'}</td>
                   <td className="py-2 px-4 text-slate-900">{formatDate(project?.actualCompletionDate)}</td>
                 </tr>
               </tbody>
