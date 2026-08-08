@@ -74,12 +74,66 @@ export const getAppData = (): AppState => {
   return initialState;
 };
 
-export const saveAppData = (data: AppState) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  // Save to Firebase (sanitize undefined values which Firestore setDoc rejects)
-  const firestoreData = JSON.parse(JSON.stringify(data));
-  setDoc(doc(db, 'appData', 'main'), firestoreData).catch(console.error);
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingDataToSave: AppState | null = null;
+let isSavingToFirestore = false;
+
+const performFirestoreSave = async (data: AppState) => {
+  if (isSavingToFirestore) {
+    pendingDataToSave = data;
+    return;
+  }
+
+  isSavingToFirestore = true;
+  pendingDataToSave = null;
+
+  try {
+    const firestoreData = JSON.parse(JSON.stringify(data));
+    await setDoc(doc(db, 'appData', 'main'), firestoreData);
+  } catch (err) {
+    console.error("Firestore save error:", err);
+  } finally {
+    isSavingToFirestore = false;
+    if (pendingDataToSave) {
+      const nextData = pendingDataToSave;
+      pendingDataToSave = null;
+      performFirestoreSave(nextData);
+    }
+  }
 };
+
+export const saveAppData = (data: AppState) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error("Failed to write to localStorage", e);
+  }
+
+  pendingDataToSave = data;
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+  }
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    if (pendingDataToSave) {
+      const dataToSave = pendingDataToSave;
+      performFirestoreSave(dataToSave);
+    }
+  }, 800);
+};
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    if (pendingDataToSave) {
+      const dataToSave = pendingDataToSave;
+      performFirestoreSave(dataToSave);
+    }
+  });
+}
 
 interface StoreState {
   data: AppState;
@@ -102,27 +156,26 @@ export const useAppStore = create<StoreState>((set) => ({
 // Setup Firebase listener
 onSnapshot(doc(db, 'appData', 'main'), (docSnap) => {
   if (docSnap.exists()) {
-    const firebaseData = docSnap.data() as AppState;
-    if (!firebaseData.contactRoles || firebaseData.contactRoles.length === 0) {
-      firebaseData.contactRoles = DEFAULT_CONTACT_ROLES;
+    if (!docSnap.metadata.hasPendingWrites || !useAppStore.getState().isFirebaseLoaded) {
+      const firebaseData = docSnap.data() as AppState;
+      if (!firebaseData.contactRoles || firebaseData.contactRoles.length === 0) {
+        firebaseData.contactRoles = DEFAULT_CONTACT_ROLES;
+      }
+      if (!firebaseData.workerRoles || firebaseData.workerRoles.length === 0) {
+        firebaseData.workerRoles = DEFAULT_WORKER_ROLES;
+      }
+      if (!firebaseData.scheduleTasks) {
+        firebaseData.scheduleTasks = [];
+      }
+      useAppStore.setState({ data: { ...initialState, ...firebaseData }, isFirebaseLoaded: true, syncError: null });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(firebaseData));
     }
-    if (!firebaseData.workerRoles || firebaseData.workerRoles.length === 0) {
-      firebaseData.workerRoles = DEFAULT_WORKER_ROLES;
-    }
-    if (!firebaseData.scheduleTasks) {
-      firebaseData.scheduleTasks = [];
-    }
-    useAppStore.setState({ data: { ...initialState, ...firebaseData }, isFirebaseLoaded: true });
-    // Also update local storage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(firebaseData));
   } else {
-    // If no document exists in Firebase yet, push local state up
     const localData = getAppData();
-    const firestoreData = JSON.parse(JSON.stringify(localData));
-    setDoc(doc(db, 'appData', 'main'), firestoreData).catch(console.error);
+    performFirestoreSave(localData);
     useAppStore.setState({ isFirebaseLoaded: true, syncError: null });
   }
 }, (error) => {
   console.error("Firebase sync error:", error);
-  useAppStore.setState({ syncError: error.message || "ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (อาจจะติด Permission)" });
+  useAppStore.setState({ syncError: error.message || "ไม่สามารถเชื่อมต่อฐานข้อมูลได้" });
 });
