@@ -37,27 +37,39 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
   const project = data.projects.find(p => p.id === projectId);
   
   // Master Scope of Work items defined in Scope of Work tab
-  const masterProjectScopes = data.scopes
+  const masterProjectScopes = (data.scopes || [])
     .filter(s => s.projectId === projectId)
     .sort((a, b) => (a.order || 0) - (b.order || 0));
 
-  // Check if project has dedicated scheduleTasks
-  const hasScheduleTasks = Boolean(data.scheduleTasks && data.scheduleTasks.some(s => s.projectId === projectId));
-  const rawScheduleTasks = hasScheduleTasks
-    ? (data.scheduleTasks?.filter(s => s.projectId === projectId) || [])
-    : masterProjectScopes;
+  const scheduleProjectTasks = (data.scheduleTasks || [])
+    .filter(s => s.projectId === projectId)
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  // Combine tasks to ensure both views share identical task lists and no scope items are lost
+  let rawScheduleTasks: ScopeType[] = [];
+  if (scheduleProjectTasks.length > 0) {
+    const existingIds = new Set(scheduleProjectTasks.map(s => s.id));
+    const missingMasterScopes = masterProjectScopes.filter(m => !existingIds.has(m.id));
+    rawScheduleTasks = [...scheduleProjectTasks, ...missingMasterScopes];
+  } else {
+    rawScheduleTasks = masterProjectScopes;
+  }
 
   const projectScopes = [...rawScheduleTasks].sort((a, b) => (a.order || 0) - (b.order || 0));
   const mainScopes = projectScopes.filter(s => !s.parentId);
 
   const saveScheduleTasks = (updatedProjectScheduleTasks: ScopeType[]) => {
     const otherProjectsScheduleTasks = (data.scheduleTasks || []).filter(s => s.projectId !== projectId);
+    const otherProjectsScopes = (data.scopes || []).filter(s => s.projectId !== projectId);
+
     const normalized = updatedProjectScheduleTasks.map((s, idx) => ({
       ...s,
       order: idx,
     }));
+
     updateData({
-      scheduleTasks: [...otherProjectsScheduleTasks, ...normalized]
+      scheduleTasks: [...otherProjectsScheduleTasks, ...normalized],
+      scopes: [...otherProjectsScopes, ...normalized],
     });
   };
 
