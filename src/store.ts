@@ -15,6 +15,17 @@ export const DEFAULT_CONTACT_ROLES = [
   { id: 'role-7', name: 'Other (อื่นๆ)' },
 ];
 
+export const DEFAULT_WORKER_ROLES = [
+  { id: 'wrole-1', name: 'หัวหน้าทีม / หัวหน้าช่าง' },
+  { id: 'wrole-2', name: 'ช่างเทคนิค / ช่างติดตั้ง' },
+  { id: 'wrole-3', name: 'ช่างไฟฟ้า' },
+  { id: 'wrole-4', name: 'ช่างโครงสร้าง / ช่างเชื่อม' },
+  { id: 'wrole-5', name: 'เจ้าหน้าที่ความปลอดภัย (จป.)' },
+  { id: 'wrole-6', name: 'ผู้ช่วยช่าง / แรงงาน' },
+  { id: 'wrole-7', name: 'โฟร์แมน / วิศวกรคุมงาน' },
+  { id: 'wrole-8', name: 'อื่นๆ' },
+];
+
 const initialState: AppState = {
   language: 'th',
   projectStatuses: [
@@ -29,6 +40,7 @@ const initialState: AppState = {
   projectManagers: [],
   contractorMaster: [],
   contactRoles: DEFAULT_CONTACT_ROLES,
+  workerRoles: DEFAULT_WORKER_ROLES,
   projects: [],
   scopes: [],
   scheduleTasks: [],
@@ -47,6 +59,9 @@ export const getAppData = (): AppState => {
       const parsed = JSON.parse(data);
       if (!parsed.contactRoles || parsed.contactRoles.length === 0) {
         parsed.contactRoles = DEFAULT_CONTACT_ROLES;
+      }
+      if (!parsed.workerRoles || parsed.workerRoles.length === 0) {
+        parsed.workerRoles = DEFAULT_WORKER_ROLES;
       }
       if (!parsed.scheduleTasks) {
         parsed.scheduleTasks = [];
@@ -90,6 +105,9 @@ onSnapshot(doc(db, 'appData', 'main'), (docSnap) => {
     const firebaseData = docSnap.data() as AppState;
     if (!firebaseData.contactRoles || firebaseData.contactRoles.length === 0) {
       firebaseData.contactRoles = DEFAULT_CONTACT_ROLES;
+    }
+    if (!firebaseData.workerRoles || firebaseData.workerRoles.length === 0) {
+      firebaseData.workerRoles = DEFAULT_WORKER_ROLES;
     }
     if (!firebaseData.scheduleTasks) {
       firebaseData.scheduleTasks = [];

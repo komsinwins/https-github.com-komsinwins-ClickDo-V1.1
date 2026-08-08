@@ -8,7 +8,7 @@ import { SaveButton } from '../components/SaveButton';
 export function MasterData() {
   const { data, updateData } = useAppStore();
   const lang = data.language || 'th';
-  const [activeTab, setActiveTab] = useState<'customers' | 'owners' | 'salespersons' | 'projectManagers' | 'contractorMaster' | 'projectStatuses' | 'contactRoles'>('customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'owners' | 'salespersons' | 'projectManagers' | 'contractorMaster' | 'projectStatuses' | 'contactRoles' | 'workerRoles'>('customers');
   const [newItemName, setNewItemName] = useState('');
   const [statusColor, setStatusColor] = useState('#0061FF');
   const [contractorForm, setContractorForm] = useState({
@@ -71,6 +71,13 @@ export function MasterData() {
         c.role === (oldItem as any).name ? { ...c, role: editForm.name.trim() } : c
       );
       updates.contacts = updatedContacts;
+    }
+
+    if (activeTab === 'workerRoles' && oldItem && 'name' in oldItem && (oldItem as any).name !== editForm.name) {
+      const updatedWorkers = (data.workers || []).map((w: any) =>
+        w.role === (oldItem as any).name ? { ...w, role: editForm.name.trim() } : w
+      );
+      updates.workers = updatedWorkers;
     }
 
     updateData(updates);
@@ -192,6 +199,7 @@ export function MasterData() {
     { id: 'contractorMaster', label: lang === 'th' ? 'ผู้รับเหมา' : 'Contractors' },
     { id: 'projectStatuses', label: lang === 'th' ? 'สถานะโครงการ' : 'Project Statuses' },
     { id: 'contactRoles', label: lang === 'th' ? 'บทบาทผู้ติดต่อ' : 'Contact Roles' },
+    { id: 'workerRoles', label: lang === 'th' ? 'หน้าที่ผู้ปฏิบัติงาน' : 'Worker Roles' },
   ];
 
   return (

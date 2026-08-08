@@ -118,6 +118,11 @@ export interface Vehicle {
   color: string;
 }
 
+export interface WorkerRole {
+  id: string;
+  name: string;
+}
+
 export interface ContactRole {
   id: string;
   name: string;
@@ -167,6 +172,7 @@ export interface AppState {
   projectManagers: ProjectManager[];
   contractorMaster: ContractorMaster[];
   contactRoles?: ContactRole[];
+  workerRoles?: WorkerRole[];
   projects: Project[];
   scopes: ScopeOfWork[];
   scheduleTasks?: ScheduleTask[];
