@@ -25,6 +25,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     parentId?: string;
   } | null>(null);
   const [insertTaskName, setInsertTaskName] = useState<string>('');
+  const [insertDurationDays, setInsertDurationDays] = useState<number>(1);
   const [activeInsertMenuId, setActiveInsertMenuId] = useState<string | null>(null);
   
   // Pre-Work Assessment States
@@ -737,7 +738,7 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       projectId,
       parentId: insertState.isSub ? insertState.parentId : undefined,
       taskName: insertTaskName.trim(),
-      durationDays: 1,
+      durationDays: Math.max(1, insertDurationDays || 1),
       progress: 0,
     };
 
@@ -786,9 +787,10 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
       });
     }
 
-    handleReorderScopes(reordered);
+    saveScheduleTasks(reordered);
     setInsertState(null);
     setInsertTaskName('');
+    setInsertDurationDays(1);
   };
 
   // Render Inline Insertion Row
@@ -809,14 +811,14 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
     }
 
     return (
-      <tr key={`insert-${targetId}-${position}`} className="bg-amber-50/90 border-2 border-amber-400">
+      <tr key={`insert-${targetId}-${position}`} className="bg-amber-50/95 border-2 border-amber-400">
         <td className="p-2 text-center text-xs font-bold text-amber-700">
           📍
         </td>
         <td className="p-2" colSpan={8}>
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            <span className="text-xs font-bold text-amber-800 whitespace-nowrap flex items-center gap-1">
-              <Plus className="w-3.5 h-3.5 text-amber-600" />
+            <span className="text-xs font-bold text-amber-900 whitespace-nowrap flex items-center gap-1 bg-amber-200/80 px-2 py-0.5 rounded border border-amber-300">
+              <Plus className="w-3.5 h-3.5 text-amber-700" />
               {isSub
                 ? (lang === 'th' ? `แทรกงานย่อย (${position === 'above' ? 'ด้านบน' : 'ด้านล่าง'})` : `Insert Sub-Task (${position})`)
                 : (lang === 'th' ? `แทรกงานหลัก (${position === 'above' ? 'ด้านบน' : 'ด้านล่าง'})` : `Insert Main Task (${position})`)}
@@ -828,32 +830,64 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
               onChange={(e) => setInsertTaskName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleConfirmInsert();
-                if (e.key === 'Escape') setInsertState(null);
+                if (e.key === 'Escape') {
+                  setInsertState(null);
+                  setInsertTaskName('');
+                  setInsertDurationDays(1);
+                }
               }}
               placeholder={
                 isSub
                   ? (lang === 'th' ? 'กรอกชื่อหัวข้องานย่อยที่ต้องการแทรกแล้วกด Enter...' : 'Enter sub-task name & press Enter...')
                   : (lang === 'th' ? 'กรอกชื่อหัวข้องานหลักที่ต้องการแทรกแล้วกด Enter...' : 'Enter main task name & press Enter...')
               }
-              className="flex-1 min-w-[200px] px-3 py-1 text-xs border border-amber-400 rounded bg-white font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="flex-1 min-w-[180px] px-3 py-1 text-xs border border-amber-400 rounded bg-white font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
               autoFocus
             />
+            {masterProjectScopes.length > 0 && (
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setInsertTaskName(e.target.value);
+                  }
+                }}
+                className="px-2 py-1 text-xs border border-amber-300 rounded bg-amber-100/60 text-amber-900 font-medium outline-none focus:ring-1 focus:ring-amber-500 max-w-[170px] truncate"
+                defaultValue=""
+              >
+                <option value="" disabled>{lang === 'th' ? '-- หรือเลือกจากขอบเขตงาน --' : '-- Or select scope --'}</option>
+                {masterProjectScopes.map(s => (
+                  <option key={s.id} value={s.taskName}>{s.taskName}</option>
+                ))}
+              </select>
+            )}
+            <div className="flex items-center gap-1 shrink-0 bg-white px-2 py-0.5 border border-amber-300 rounded">
+              <span className="text-[11px] font-bold text-slate-700 whitespace-nowrap">{lang === 'th' ? 'ระยะเวลา:' : 'Duration:'}</span>
+              <input
+                type="number"
+                min="1"
+                value={insertDurationDays}
+                onChange={(e) => setInsertDurationDays(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-12 px-1 py-0.5 text-xs border border-slate-300 rounded bg-white font-bold text-center text-slate-800"
+              />
+              <span className="text-[10px] text-slate-500 font-medium">{lang === 'th' ? 'วัน' : 'days'}</span>
+            </div>
             <button
               type="button"
               onClick={handleConfirmInsert}
               disabled={!insertTaskName.trim()}
-              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-50 flex items-center gap-1 shrink-0 shadow-xs"
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-xs font-bold disabled:opacity-50 flex items-center gap-1 shrink-0 shadow-xs cursor-pointer"
             >
               <Check className="w-3.5 h-3.5" />
-              <span>{lang === 'th' ? 'แทรกงานนี้' : 'Confirm Insert'}</span>
+              <span>{lang === 'th' ? 'แทรกงานนี้' : 'Confirm'}</span>
             </button>
             <button
               type="button"
               onClick={() => {
                 setInsertState(null);
                 setInsertTaskName('');
+                setInsertDurationDays(1);
               }}
-              className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-200/80 hover:bg-slate-300 rounded shrink-0"
+              className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-200/80 hover:bg-slate-300 rounded shrink-0 cursor-pointer"
             >
               {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
             </button>
@@ -1797,6 +1831,9 @@ export function SchedulePlan({ projectId }: { projectId: string }) {
                           </td>
                         </tr>
                       )}
+
+                      {/* Inline Insertion Row BELOW Main Task */}
+                      {renderInlineInsertRow(main.id, 'below', false, undefined, main.taskName)}
                     </React.Fragment>
                   );
                 })
